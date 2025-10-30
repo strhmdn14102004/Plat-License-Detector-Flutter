@@ -1,4 +1,4 @@
-// ignore_for_file: body_might_complete_normally_catch_error, depend_on_referenced_packages
+// ignore_for_file: body_might_complete_normally_catch_error, curly_braces_in_flow_control_structures, depend_on_referenced_packages
 
 import 'dart:async';
 import 'dart:io';
@@ -11,7 +11,6 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:image/image.dart' as imglib;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-import 'package:tflite_flutter/tflite_flutter.dart';
 
 import '../../service/yolo_service.dart';
 import 'plat_event.dart';
@@ -23,9 +22,14 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
   bool _busy = false;
   DateTime _lastProcessed = DateTime.fromMillisecondsSinceEpoch(0);
   DateTime _lastOcr = DateTime.fromMillisecondsSinceEpoch(0);
+
   Rect? _smoothBox;
 
-  final int intervalMs = 130;
+  final int intervalMs = 280;
+
+  late final TextRecognizer _ocr = TextRecognizer(
+    script: TextRecognitionScript.latin,
+  );
 
   PlateBloc({required this.yoloService})
     : super(
@@ -41,18 +45,25 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
       ) {
     on<StartCamera>(_onStartCamera);
     on<StopCamera>(_onStopCamera);
-    on<ProcessCameraImage>(_onProcessCameraImage);
+    on<ProcessCameraImage>(_onProcessCameraImage, transformer: _droppable());
+  }
+
+  EventTransformer<T> _droppable<T>() {
+    return (events, mapper) => events.asyncExpand((e) => mapper(e));
   }
 
   Future<void> _onStartCamera(StartCamera ev, Emitter<PlateState> emit) async {
     final controller = CameraController(
       ev.camera,
-      ResolutionPreset.medium,
+      ResolutionPreset.low,
       enableAudio: false,
-      imageFormatGroup: ImageFormatGroup.yuv420,
+      imageFormatGroup: Platform.isIOS
+          ? ImageFormatGroup.bgra8888
+          : ImageFormatGroup.yuv420,
     );
     try {
       await controller.initialize();
+
       await controller.startImageStream((image) {
         if (!_busy) add(ProcessCameraImage(image, controller));
       });
@@ -70,6 +81,17 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
       );
     } catch (e, st) {
       debugPrint("Camera init error: $e\n$st");
+      emit(
+        PlateState(
+          isCameraReady: false,
+          controller: null,
+          isProcessing: false,
+          lastBox: null,
+          lastText: null,
+          detectedPlates: const [],
+          message: 'Gagal init kamera',
+        ),
+      );
     }
   }
 
@@ -101,22 +123,21 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
     final now = DateTime.now();
     if (now.difference(_lastProcessed).inMilliseconds < intervalMs) return;
     _lastProcessed = now;
+
+    if (_busy) return;
     _busy = true;
 
     try {
-      final jpeg = await compute(_convertToJpegIsolate, ev.cameraImage);
+      final jpeg = await compute(_convertImageFast, {
+        'image': ev.cameraImage,
+        'platformIsIOS': Platform.isIOS,
+      });
       if (jpeg == null) {
         _busy = false;
         return;
       }
 
-      final results = await compute(_detectInIsolate, {
-        'jpeg': jpeg,
-        'modelBytes': yoloService.modelBytes,
-        'inputSize': yoloService.inputSize,
-        'scoreThreshold': yoloService.scoreThreshold,
-      });
-
+      final results = await yoloService.detectFromImageBytes(jpeg);
       if (results.isEmpty) {
         _busy = false;
         return;
@@ -124,7 +145,7 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
 
       results.sort((a, b) => b.score.compareTo(a.score));
       final top = results.first;
-      if (top.score < 0.4) {
+      if (top.score < 0.40) {
         _busy = false;
         return;
       }
@@ -158,6 +179,7 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
 
       if (now.difference(_lastOcr).inMilliseconds > 900) {
         _lastOcr = now;
+
         final text = await _runOcr(jpeg, rawBox, yoloService.inputSize);
         if (text != null && text.isNotEmpty) {
           final updated = List<String>.from(state.detectedPlates);
@@ -174,7 +196,31 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
               message: 'Plat terbaca: $text',
             ),
           );
+        } else {
+          emit(
+            PlateState(
+              isCameraReady: state.isCameraReady,
+              controller: state.controller,
+              isProcessing: false,
+              lastBox: _smoothBox,
+              lastText: state.lastText,
+              detectedPlates: state.detectedPlates,
+              message: 'Plat belum terbaca',
+            ),
+          );
         }
+      } else {
+        emit(
+          PlateState(
+            isCameraReady: state.isCameraReady,
+            controller: state.controller,
+            isProcessing: false,
+            lastBox: _smoothBox,
+            lastText: state.lastText,
+            detectedPlates: state.detectedPlates,
+            message: state.message,
+          ),
+        );
       }
     } catch (e, st) {
       debugPrint('error di process: $e\n$st');
@@ -183,37 +229,68 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
     }
   }
 
-  static Future<Uint8List?> _convertToJpegIsolate(CameraImage image) async {
+  static Future<Uint8List?> _convertImageFast(Map<String, dynamic> args) async {
     try {
-      final width = image.width;
-      final height = image.height;
-      final y = image.planes[0];
-      final u = image.planes[1];
-      final v = image.planes[2];
+      final CameraImage image = args['image'] as CameraImage;
+      final bool platformIsIOS = args['platformIsIOS'] as bool;
 
-      final yRowStride = y.bytesPerRow;
-      final uvRowStride = u.bytesPerRow;
-      final uvPixelStride = u.bytesPerPixel ?? 1;
+      if (platformIsIOS && image.format.group == ImageFormatGroup.bgra8888) {
+        final plane = image.planes.first;
+        final img = imglib.Image.fromBytes(
+          width: image.width,
+          height: image.height,
+          bytes: plane.bytes.buffer,
+          order: imglib.ChannelOrder.bgra,
+        );
 
-      final img = imglib.Image(width: width, height: height);
-      for (int y0 = 0; y0 < height; y0++) {
-        for (int x = 0; x < width; x++) {
-          final yIndex = y0 * yRowStride + x;
-          final uvIndex = (y0 ~/ 2) * uvRowStride + (x ~/ 2) * uvPixelStride;
-          final yp = y.bytes[yIndex];
-          final up = u.bytes[uvIndex];
-          final vp = v.bytes[uvIndex];
-          int r = (yp + 1.370705 * (vp - 128)).clamp(0, 255).toInt();
-          int g = (yp - 0.337633 * (up - 128) - 0.698001 * (vp - 128))
-              .clamp(0, 255)
-              .toInt();
-          int b = (yp + 1.732446 * (up - 128)).clamp(0, 255).toInt();
-          img.setPixelRgba(x, y0, r, g, b, 255);
+        final resized = imglib.copyResize(img, width: 960);
+        return Uint8List.fromList(imglib.encodeJpg(resized, quality: 70));
+      }
+
+      final w = image.width, h = image.height;
+      final p0 = image.planes[0];
+      final p1 = image.planes[1];
+      final p2 = image.planes[2];
+      final yRowStride = p0.bytesPerRow;
+      final uvRowStride = p1.bytesPerRow;
+      final uvPixelStride = p1.bytesPerPixel ?? 1;
+
+      final rgb = imglib.Image(width: w, height: h);
+      final yBytes = p0.bytes, uBytes = p1.bytes, vBytes = p2.bytes;
+
+      for (int y = 0; y < h; y++) {
+        final pY = y * yRowStride;
+        final pUV = (y >> 1) * uvRowStride;
+        for (int x = 0; x < w; x++) {
+          final uvIndex = pUV + (x >> 1) * uvPixelStride;
+          final yp = yBytes[pY + x] & 0xFF;
+          final up = uBytes[uvIndex] & 0xFF;
+          final vp = vBytes[uvIndex] & 0xFF;
+
+          int r = (yp + 1.402 * (vp - 128)).round();
+          int g = (yp - 0.344136 * (up - 128) - 0.714136 * (vp - 128)).round();
+          int b = (yp + 1.772 * (up - 128)).round();
+
+          if (r < 0) {
+            r = 0;
+          } else if (r > 255)
+            r = 255;
+          if (g < 0) {
+            g = 0;
+          } else if (g > 255)
+            g = 255;
+          if (b < 0) {
+            b = 0;
+          } else if (b > 255)
+            b = 255;
+
+          rgb.setPixelRgba(x, y, r, g, b, 255);
         }
       }
-      return Uint8List.fromList(imglib.encodeJpg(img, quality: 70));
-    } catch (e) {
-      debugPrint('convert isolate error: $e');
+
+      final resized = imglib.copyResize(rgb, width: 960);
+      return Uint8List.fromList(imglib.encodeJpg(resized, quality: 70));
+    } catch (_) {
       return null;
     }
   }
@@ -227,6 +304,7 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
     final isPortrait =
         controller.description.sensorOrientation == 90 ||
         controller.description.sensorOrientation == 270;
+
     final previewW = isPortrait ? preview.height : preview.width;
     final previewH = isPortrait ? preview.width : preview.height;
 
@@ -241,7 +319,7 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
     );
   }
 
-  Rect _applySmoothing(Rect newBox, Rect? prevBox, {double alpha = 0.3}) {
+  Rect _applySmoothing(Rect newBox, Rect? prevBox, {double alpha = 0.30}) {
     if (prevBox == null) return newBox;
     double lerp(double a, double b) => a + (b - a) * alpha;
     return Rect.fromLTWH(
@@ -256,6 +334,7 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
     try {
       final img = imglib.decodeImage(jpeg);
       if (img == null) return null;
+
       final sx = img.width / inputSize;
       final sy = img.height / inputSize;
       final x = (box.left * sx).round().clamp(0, img.width - 1);
@@ -263,18 +342,28 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
       final w = (box.width * sx).round().clamp(10, img.width - x);
       final h = (box.height * sy).round().clamp(10, img.height - y);
 
-      final cropped = imglib.copyCrop(img, x: x, y: y, width: w, height: h);
+      final pad = (0.08 * w).round();
+      final x0 = (x - pad).clamp(0, img.width - 1);
+      final y0 = (y - pad).clamp(0, img.height - 1);
+      final w0 = (w + pad * 2).clamp(10, img.width - x0);
+      final h0 = (h + pad * 2).clamp(10, img.height - y0);
+
+      final cropped = imglib.copyCrop(img, x: x0, y: y0, width: w0, height: h0);
+
+      final pre = imglib.grayscale(cropped);
+      final sharp = imglib.adjustColor(pre, contrast: 1.15, brightness: 0.02);
+
       final dir = await getTemporaryDirectory();
       final path = p.join(
         dir.path,
         'ocr_${DateTime.now().millisecondsSinceEpoch}.jpg',
       );
       final file = File(path);
-      await file.writeAsBytes(imglib.encodeJpg(cropped, quality: 95));
+      await file.writeAsBytes(imglib.encodeJpg(sharp, quality: 95));
 
-      final rec = TextRecognizer(script: TextRecognitionScript.latin);
-      final result = await rec.processImage(InputImage.fromFilePath(file.path));
-      await rec.close();
+      final result = await _ocr.processImage(
+        InputImage.fromFilePath(file.path),
+      );
       await file.delete().catchError((_) {});
 
       final lines = <String>[];
@@ -283,74 +372,22 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
 
       for (final block in result.blocks) {
         for (final l in block.lines) {
-          final t = l.text.trim().toUpperCase();
+          final t = l.text.trim().toUpperCase().replaceAll('O', '0');
           if (plate.hasMatch(t) || time.hasMatch(t)) lines.add(t);
         }
       }
       return lines.take(2).join('\n');
-    } catch (e, st) {
-      debugPrint('OCR error: $e\n$st');
+    } catch (_) {
       return null;
     }
   }
 
   @override
   Future<void> close() async {
+    try {
+      await _ocr.close();
+    } catch (_) {}
     await state.controller?.dispose();
     return super.close();
   }
-}
-
-Future<List<YoloResult>> _detectInIsolate(Map<String, dynamic> args) async {
-  final jpeg = args['jpeg'] as Uint8List;
-  final modelBytes = args['modelBytes'] as Uint8List;
-  final inputSize = args['inputSize'] as int;
-  final threshold = args['scoreThreshold'] as double;
-
-  final interpreter = Interpreter.fromBuffer(
-    modelBytes,
-    options: InterpreterOptions()..useNnApiForAndroid = true,
-  );
-  final img = imglib.decodeImage(jpeg);
-  if (img == null) return [];
-
-  final resized = imglib.copyResize(img, width: inputSize, height: inputSize);
-  final input = List<double>.filled(inputSize * inputSize * 3, 0.0);
-  int i = 0;
-  for (int y = 0; y < inputSize; y++) {
-    for (int x = 0; x < inputSize; x++) {
-      final p = resized.getPixel(x, y);
-      input[i++] = p.r / 255.0;
-      input[i++] = p.g / 255.0;
-      input[i++] = p.b / 255.0;
-    }
-  }
-
-  final output = List.generate(
-    1,
-    (_) => List.generate(5, (_) => List<double>.filled(8400, 0.0)),
-  );
-  interpreter.run(input.reshape([1, inputSize, inputSize, 3]), output);
-  interpreter.close();
-
-  final xs = output[0][0];
-  final ys = output[0][1];
-  final ws = output[0][2];
-  final hs = output[0][3];
-  final confs = output[0][4];
-
-  final res = <YoloResult>[];
-  for (int j = 0; j < 8400; j++) {
-    final s = confs[j];
-    if (s < threshold) continue;
-    final x = xs[j], y = ys[j], w = ws[j], h = hs[j];
-    final x1 = ((x - w / 2) * inputSize).clamp(0, inputSize - 1).round();
-    final y1 = ((y - h / 2) * inputSize).clamp(0, inputSize - 1).round();
-    final x2 = ((x + w / 2) * inputSize).clamp(0, inputSize - 1).round();
-    final y2 = ((y + h / 2) * inputSize).clamp(0, inputSize - 1).round();
-    res.add(
-      YoloResult(x1: x1, y1: y1, x2: x2, y2: y2, score: s, label: 'plate'),
-    );
-  }
-  return res;
 }
