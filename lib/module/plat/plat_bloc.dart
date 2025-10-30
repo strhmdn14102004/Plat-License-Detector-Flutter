@@ -21,8 +21,9 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
   bool _busy = false;
   DateTime _lastProcessed = DateTime.fromMillisecondsSinceEpoch(0);
   DateTime _lastOcr = DateTime.fromMillisecondsSinceEpoch(0);
-  final int intervalMs = 180;
+  final int intervalMs = 250;
   Rect? _smoothBox;
+
   PlateBloc({required this.yoloService})
     : super(
         PlateState(
@@ -39,6 +40,7 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
     on<StopCamera>(_onStopCamera);
     on<ProcessCameraImage>(_onProcessCameraImage);
   }
+
   Future<void> _onStartCamera(StartCamera ev, Emitter<PlateState> emit) async {
     final controller = CameraController(
       ev.camera,
@@ -54,6 +56,7 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
       controller.startImageStream((image) {
         add(ProcessCameraImage(image, controller));
       });
+
       emit(
         PlateState(
           isCameraReady: true,
@@ -78,6 +81,7 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
       }
       await ctrl?.dispose();
     } catch (_) {}
+
     emit(
       PlateState(
         isCameraReady: false,
@@ -96,44 +100,54 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
     Emitter<PlateState> emit,
   ) async {
     final now = DateTime.now();
+    if (!state.isCameraReady || ev.controller.value.isTakingPicture) return;
     if (now.difference(_lastProcessed).inMilliseconds < intervalMs) return;
     if (_busy) return;
+
     _busy = true;
     _lastProcessed = now;
+
     try {
       final jpeg = await _convertCameraImageToJpeg(ev.cameraImage);
       if (jpeg == null) {
         _busy = false;
         return;
       }
+
       final results = await compute(_detectInIsolate, {
         'jpeg': jpeg,
         'modelBytes': yoloService.modelBytes,
         'inputSize': yoloService.inputSize,
         'scoreThreshold': yoloService.scoreThreshold,
       });
+
       if (results.isEmpty) {
         _busy = false;
         return;
       }
+
       results.sort((a, b) => b.score.compareTo(a.score));
       final top = results.first;
       if (top.score < 0.45) {
         _busy = false;
         return;
       }
+
       final rawBox = Rect.fromLTWH(
         top.x1.toDouble(),
         top.y1.toDouble(),
         (top.x2 - top.x1).toDouble(),
         (top.y2 - top.y1).toDouble(),
       );
+
       final mappedBox = _translateBox(
         yoloBox: rawBox,
         controller: ev.controller,
         inputSize: yoloService.inputSize,
       );
+
       _smoothBox = _applySmoothing(mappedBox, _smoothBox);
+
       emit(
         PlateState(
           isCameraReady: state.isCameraReady,
@@ -145,7 +159,8 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
           message: 'Plat terdeteksi ${(top.score * 100).toStringAsFixed(1)}%',
         ),
       );
-      if (now.difference(_lastOcr).inMilliseconds > 1000) {
+
+      if (now.difference(_lastOcr).inMilliseconds >= 1800) {
         _lastOcr = now;
         final ocrText = await _runOcrDirect(
           jpeg,
@@ -155,6 +170,7 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
         if (ocrText != null && ocrText.isNotEmpty) {
           final list = List<String>.from(state.detectedPlates);
           if (!list.contains(ocrText)) list.add(ocrText);
+
           emit(
             PlateState(
               isCameraReady: state.isCameraReady,
@@ -192,12 +208,26 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
     required int inputSize,
   }) {
     final previewSize = controller.value.previewSize!;
-    final double scaleX = previewSize.width / inputSize;
-    final double scaleY = previewSize.height / inputSize;
-    final double left = yoloBox.left * scaleX;
-    final double top = yoloBox.top * scaleY;
-    final double width = yoloBox.width * scaleX;
-    final double height = yoloBox.height * scaleY;
+    final isIOS = Platform.isIOS;
+
+    final double scaleX = isIOS
+        ? previewSize.height / inputSize
+        : previewSize.width / inputSize;
+    final double scaleY = isIOS
+        ? previewSize.width / inputSize
+        : previewSize.height / inputSize;
+
+    double left = yoloBox.left * scaleX;
+    double top = yoloBox.top * scaleY;
+    double width = yoloBox.width * scaleX;
+    double height = yoloBox.height * scaleY;
+
+    if (isIOS) {
+      final newLeft = top;
+      final newTop = previewSize.height - left - width;
+      return Rect.fromLTWH(newLeft, newTop, height, width);
+    }
+
     return Rect.fromLTWH(left, top, width, height);
   }
 
@@ -208,12 +238,14 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
       if (Platform.isIOS) {
         img = imglib.copyRotate(img, angle: 90);
       }
+
       final sx = img.width / inputSize;
       final sy = img.height / inputSize;
       final x1 = (box.left * sx).round();
       final y1 = (box.top * sy).round();
       final w = (box.width * sx).round();
       final h = (box.height * sy).round();
+
       final cropped = imglib.copyCrop(
         img,
         x: x1.clamp(0, img.width - 1),
@@ -221,6 +253,7 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
         width: w.clamp(10, img.width - x1),
         height: h.clamp(10, img.height - y1),
       );
+
       final dir = await getTemporaryDirectory();
       final path = p.join(
         dir.path,
@@ -228,15 +261,18 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
       );
       final file = File(path);
       await file.writeAsBytes(imglib.encodeJpg(cropped, quality: 95));
+
       final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
       final result = await recognizer.processImage(
         InputImage.fromFilePath(file.path),
       );
       await recognizer.close();
       await file.delete().catchError((_) {});
+
       final lines = <String>[];
       final plateRegex = RegExp(r'^[A-Z]{1,2}\s?\d{1,4}\s?[A-Z]{0,3}$');
       final timeRegex = RegExp(r'^\d{2}[:.,]?\d{2}$');
+
       for (final block in result.blocks) {
         for (final line in block.lines) {
           final text = line.text.trim().toUpperCase();
@@ -245,6 +281,7 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
           }
         }
       }
+
       if (lines.isEmpty) return null;
       return lines.take(2).join('\n');
     } catch (e, st) {
@@ -257,11 +294,10 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
     try {
       if (image.format.group == ImageFormatGroup.bgra8888) {
         final plane = image.planes.first;
-        final bgra = plane.bytes;
         final img = imglib.Image.fromBytes(
           width: image.width,
           height: image.height,
-          bytes: bgra.buffer,
+          bytes: plane.bytes.buffer,
           order: imglib.ChannelOrder.bgra,
         );
         return Uint8List.fromList(imglib.encodeJpg(img, quality: 70));
@@ -275,6 +311,7 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
         final uvRowStride = uPlane.bytesPerRow;
         final uvPixelStride = uPlane.bytesPerPixel ?? 1;
         final img = imglib.Image(width: width, height: height);
+
         for (int y = 0; y < height; y++) {
           for (int x = 0; x < width; x++) {
             final yIndex = y * yRowStride + x;
@@ -310,18 +347,30 @@ Future<List<YoloResult>> _detectInIsolate(Map<String, dynamic> args) async {
   final modelBytes = args['modelBytes'] as Uint8List;
   final inputSize = args['inputSize'] as int;
   final scoreThreshold = args['scoreThreshold'] as double;
+
   final options = InterpreterOptions();
   if (Platform.isAndroid) {
     options.useNnApiForAndroid = true;
   } else if (Platform.isIOS) {
-    options.addDelegate(XNNPackDelegate());
+    try {
+      options.addDelegate(GpuDelegateV2());
+    } catch (_) {
+      options.addDelegate(XNNPackDelegate());
+    }
   }
+
   final interpreter = Interpreter.fromBuffer(modelBytes, options: options);
 
-  final img = imglib.decodeImage(jpeg);
+  var img = imglib.decodeImage(jpeg);
   if (img == null) return [];
+
+  if (Platform.isIOS) {
+    img = imglib.copyRotate(img, angle: 90);
+  }
+
   final resized = imglib.copyResize(img, width: inputSize, height: inputSize);
   final input = List<double>.filled(inputSize * inputSize * 3, 0.0);
+
   int index = 0;
   for (int y = 0; y < inputSize; y++) {
     for (int x = 0; x < inputSize; x++) {
@@ -331,17 +380,21 @@ Future<List<YoloResult>> _detectInIsolate(Map<String, dynamic> args) async {
       input[index++] = pixel.b / 255.0;
     }
   }
+
   final output = List.generate(
     1,
     (_) => List.generate(5, (_) => List<double>.filled(8400, 0.0)),
   );
+
   interpreter.run(input.reshape([1, inputSize, inputSize, 3]), output);
   interpreter.close();
+
   final xs = output[0][0];
   final ys = output[0][1];
   final ws = output[0][2];
   final hs = output[0][3];
   final confs = output[0][4];
+
   final results = <YoloResult>[];
   for (int i = 0; i < 8400; i++) {
     final score = confs[i];
@@ -354,6 +407,7 @@ Future<List<YoloResult>> _detectInIsolate(Map<String, dynamic> args) async {
     final y1 = ((y - h / 2) * inputSize).clamp(0, inputSize - 1).round();
     final x2 = ((x + w / 2) * inputSize).clamp(0, inputSize - 1).round();
     final y2 = ((y + h / 2) * inputSize).clamp(0, inputSize - 1).round();
+
     results.add(
       YoloResult(x1: x1, y1: y1, x2: x2, y2: y2, score: score, label: 'plate'),
     );
