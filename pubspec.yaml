@@ -1,0 +1,30 @@
+name: face_recognition
+description: "A new Flutter project."
+publish_to: "none"
+version: 1.0.0
+
+environment:
+  sdk: ^3.9.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  flutter_bloc: ^9.1.1
+  camera: ^0.11.3
+  tflite_flutter: ^0.12.1
+  image: ^4.5.4
+  google_mlkit_text_recognition: ^0.15.0
+  path_provider: ^2.1.5
+  path: ^1.9.1
+  hive_flutter: ^1.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/models/license_plate_detector_float16.tflite
