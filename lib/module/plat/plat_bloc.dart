@@ -44,8 +44,11 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
       ev.camera,
       ResolutionPreset.medium,
       enableAudio: false,
-      imageFormatGroup: ImageFormatGroup.yuv420,
+      imageFormatGroup: Platform.isIOS
+          ? ImageFormatGroup.bgra8888
+          : ImageFormatGroup.yuv420,
     );
+
     try {
       await controller.initialize();
       controller.startImageStream((image) {
@@ -200,8 +203,11 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
 
   Future<String?> _runOcrDirect(Uint8List jpeg, Rect box, int inputSize) async {
     try {
-      final img = imglib.decodeImage(jpeg);
+      var img = imglib.decodeImage(jpeg);
       if (img == null) return null;
+      if (Platform.isIOS) {
+        img = imglib.copyRotate(img, angle: 90);
+      }
       final sx = img.width / inputSize;
       final sy = img.height / inputSize;
       final x1 = (box.left * sx).round();
