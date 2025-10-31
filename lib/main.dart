@@ -1,7 +1,9 @@
 import 'package:face_recognition/module/home/home_page.dart';
 import 'package:face_recognition/module/plat/plat_bloc.dart';
-import 'package:face_recognition/service/yolo_service.dart';
+import 'package:face_recognition/service/ocr_isolate_pool.dart';
+import 'package:face_recognition/service/yolo_isolate_pool.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
@@ -9,23 +11,33 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
   await Hive.openBox('plates');
-  final yoloService = await YoloService.create(
-    modelPath: 'assets/models/license_plate_detector_float16.tflite',
-    inputSize: 640,
-    scoreThreshold: 0.5,
+
+  final modelBytes = await rootBundle.load(
+    'assets/models/license_plate_detector_float16.tflite',
   );
-  runApp(MyApp(yoloService: yoloService));
+  final bytes = modelBytes.buffer.asUint8List();
+
+  final yoloPool = YoloIsolatePool();
+  await yoloPool.init(bytes, 640, 0.5);
+
+  final ocrPool = OcrIsolatePool();
+  ocrPool.start();
+
+  runApp(MyApp(yoloPool: yoloPool, ocrPool: ocrPool));
 }
 
 class MyApp extends StatelessWidget {
-  final YoloService yoloService;
-  const MyApp({super.key, required this.yoloService});
+  final YoloIsolatePool yoloPool;
+  final OcrIsolatePool ocrPool;
+
+  const MyApp({super.key, required this.yoloPool, required this.ocrPool});
+
   @override
   Widget build(BuildContext context) {
     return MultiBlocProvider(
       providers: [
         BlocProvider<PlateBloc>(
-          create: (_) => PlateBloc(yoloService: yoloService),
+          create: (_) => PlateBloc(yoloPool: yoloPool, ocrPool: ocrPool),
         ),
       ],
       child: MaterialApp(
