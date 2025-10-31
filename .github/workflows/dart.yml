@@ -1,0 +1,70 @@
+name: Build and Release IPA Only
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    name: Build iOS IPA
+    runs-on: macos-14
+
+    steps:
+      # 1️⃣ Checkout project
+      - uses: actions/checkout@v4
+
+      # 2️⃣ Setup Flutter SDK
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          architecture: x64
+
+      # 3️⃣ Install dependencies
+      - name: Flutter Pub Get
+        run: flutter pub get
+
+      # 4️⃣ Setup iOS platform minimum 17.0
+      - name: Set iOS Deployment Target
+        run: |
+          mkdir -p ios
+          if [ -f ios/Podfile ]; then
+            sed -i '' 's/platform :ios, .*/platform :ios, "17.0"/' ios/Podfile || true
+          else
+            echo "platform :ios, '17.0'" > ios/Podfile
+          fi
+
+          if [ -f ios/Flutter/AppFrameworkInfo.plist ]; then
+            sed -i '' 's/<key>MinimumOSVersion<\/key><string>.*<\/string>/<key>MinimumOSVersion<\/key><string>17.0<\/string>/' ios/Flutter/AppFrameworkInfo.plist || true
+          fi
+
+      # 5️⃣ Install CocoaPods dependencies
+      - name: Install Pods
+        run: |
+          cd ios
+          pod repo update
+          pod install --repo-update
+          cd ..
+
+      # 6️⃣ Build IPA tanpa signing
+      - name: Build iOS IPA (No Codesign)
+        run: |
+          flutter clean
+          flutter build ios --release --no-codesign
+          cd build/ios/iphoneos
+          mkdir Payload
+          mv Runner.app Payload
+          zip -qq -r -9 PlatLicenseDetector.ipa Payload
+          cd ../../..
+
+      # 7️⃣ Upload hasil ke GitHub Release
+      - name: Create Release and Upload IPA
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v1.0 Beta
+          name: "Release v1.0 (iOS)"
+          body: |
+            🚀 iOS release build   
+            - Minimum iOS 14  
+            - No codesign (manual signing required for App Store upload)
+          files: build/ios/iphoneos/PlatLicenseDetector.ipa
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
