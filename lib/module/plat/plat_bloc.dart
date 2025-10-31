@@ -1,9 +1,6 @@
-// ignore_for_file: body_might_complete_normally_catch_error, depend_on_referenced_packages
-
 import 'dart:async';
 import 'dart:io';
 import 'dart:isolate';
-
 import 'package:bloc/bloc.dart';
 import 'package:camera/camera.dart';
 import 'package:face_recognition/module/plat/plat_event.dart';
@@ -117,15 +114,7 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
         return;
       }
 
-      final results = await Isolate.run(() async {
-        return await _detectInIsolate({
-          'jpeg': jpeg,
-          'modelBytes': yoloService.modelBytes,
-          'inputSize': yoloService.inputSize,
-          'scoreThreshold': yoloService.scoreThreshold,
-        });
-      });
-
+      final results = await yoloService.detectFromImageBytes(jpeg);
       if (results.isEmpty) {
         _busy = false;
         return;
@@ -345,77 +334,4 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
     await state.controller?.dispose();
     return super.close();
   }
-}
-
-Future<List<YoloResult>> _detectInIsolate(Map<String, dynamic> args) async {
-  final jpeg = args['jpeg'] as Uint8List;
-  final modelBytes = args['modelBytes'] as Uint8List;
-  final inputSize = args['inputSize'] as int;
-  final scoreThreshold = args['scoreThreshold'] as double;
-
-  final options = InterpreterOptions();
-  if (Platform.isAndroid) {
-    options.useNnApiForAndroid = true;
-  } else if (Platform.isIOS) {
-    try {
-      options.addDelegate(GpuDelegateV2());
-    } catch (_) {
-      options.addDelegate(XNNPackDelegate());
-    }
-  }
-
-  final interpreter = Interpreter.fromBuffer(modelBytes, options: options);
-
-  var img = imglib.decodeImage(jpeg);
-  if (img == null) return [];
-
-  if (Platform.isIOS && img.height > img.width) {
-    img = imglib.copyRotate(img, angle: 90);
-  }
-
-  final resized = imglib.copyResize(img, width: inputSize, height: inputSize);
-  final input = List<double>.filled(inputSize * inputSize * 3, 0.0);
-
-  int index = 0;
-  for (int y = 0; y < inputSize; y++) {
-    for (int x = 0; x < inputSize; x++) {
-      final pixel = resized.getPixel(x, y);
-      input[index++] = pixel.r / 255.0;
-      input[index++] = pixel.g / 255.0;
-      input[index++] = pixel.b / 255.0;
-    }
-  }
-
-  final output = List.generate(
-    1,
-    (_) => List.generate(5, (_) => List<double>.filled(8400, 0.0)),
-  );
-
-  interpreter.run(input.reshape([1, inputSize, inputSize, 3]), output);
-  interpreter.close();
-
-  final xs = output[0][0];
-  final ys = output[0][1];
-  final ws = output[0][2];
-  final hs = output[0][3];
-  final confs = output[0][4];
-
-  final results = <YoloResult>[];
-  for (int i = 0; i < 8400; i++) {
-    final score = confs[i];
-    if (score < scoreThreshold) continue;
-    final x = xs[i];
-    final y = ys[i];
-    final w = ws[i];
-    final h = hs[i];
-    final x1 = ((x - w / 2) * inputSize).clamp(0, inputSize - 1).round();
-    final y1 = ((y - h / 2) * inputSize).clamp(0, inputSize - 1).round();
-    final x2 = ((x + w / 2) * inputSize).clamp(0, inputSize - 1).round();
-    final y2 = ((y + h / 2) * inputSize).clamp(0, inputSize - 1).round();
-
-    results.add(
-      YoloResult(x1: x1, y1: y1, x2: x2, y2: y2, score: score, label: 'plate'),
-    );
-  }
-  return results;
 }
