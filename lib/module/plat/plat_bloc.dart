@@ -160,7 +160,8 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
         ),
       );
 
-      if (now.difference(_lastOcr).inMilliseconds >= 1800) {
+      if (now.difference(_lastOcr).inMilliseconds >=
+          (Platform.isIOS ? 1000 : 1800)) {
         _lastOcr = now;
         final ocrText = await _runOcrDirect(
           jpeg,
@@ -211,10 +212,10 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
     final isIOS = Platform.isIOS;
 
     final double scaleX = isIOS
-        ? previewSize.height / inputSize
+        ? previewSize.width / inputSize
         : previewSize.width / inputSize;
     final double scaleY = isIOS
-        ? previewSize.width / inputSize
+        ? previewSize.height / inputSize
         : previewSize.height / inputSize;
 
     double left = yoloBox.left * scaleX;
@@ -223,9 +224,11 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
     double height = yoloBox.height * scaleY;
 
     if (isIOS) {
-      final newLeft = top;
-      final newTop = previewSize.height - left - width;
-      return Rect.fromLTWH(newLeft, newTop, height, width);
+      final rotatedLeft = previewSize.width - (top + height);
+      final rotatedTop = left;
+      final rotatedW = height;
+      final rotatedH = width;
+      return Rect.fromLTWH(rotatedLeft, rotatedTop, rotatedW, rotatedH);
     }
 
     return Rect.fromLTWH(left, top, width, height);
@@ -235,32 +238,26 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
     try {
       var img = imglib.decodeImage(jpeg);
       if (img == null) return null;
-      if (Platform.isIOS) {
-        img = imglib.copyRotate(img, angle: 90);
-      }
+      if (Platform.isIOS) img = imglib.copyRotate(img, angle: 90);
 
       final sx = img.width / inputSize;
       final sy = img.height / inputSize;
-      final x1 = (box.left * sx).round();
-      final y1 = (box.top * sy).round();
-      final w = (box.width * sx).round();
-      final h = (box.height * sy).round();
 
-      final cropped = imglib.copyCrop(
-        img,
-        x: x1.clamp(0, img.width - 1),
-        y: y1.clamp(0, img.height - 1),
-        width: w.clamp(10, img.width - x1),
-        height: h.clamp(10, img.height - y1),
-      );
+      int x1 = (box.left * sx).round();
+      int y1 = (box.top * sy).round();
+      int w = (box.width * sx).round();
+      int h = (box.height * sy).round();
 
-      final dir = await getTemporaryDirectory();
-      final path = p.join(
-        dir.path,
-        'ocr_${DateTime.now().millisecondsSinceEpoch}.jpg',
-      );
-      final file = File(path);
-      await file.writeAsBytes(imglib.encodeJpg(cropped, quality: 95));
+      x1 = x1.clamp(0, img.width - 1);
+      y1 = y1.clamp(0, img.height - 1);
+      w = w.clamp(10, img.width - x1);
+      h = h.clamp(10, img.height - y1);
+
+      final cropped = imglib.copyCrop(img, x: x1, y: y1, width: w, height: h);
+      final tmp = await getTemporaryDirectory();
+      final file = File(
+        p.join(tmp.path, 'ocr_${DateTime.now().millisecondsSinceEpoch}.jpg'),
+      )..writeAsBytesSync(imglib.encodeJpg(cropped, quality: 95));
 
       final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
       final result = await recognizer.processImage(
@@ -269,15 +266,15 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
       await recognizer.close();
       await file.delete().catchError((_) {});
 
-      final lines = <String>[];
       final plateRegex = RegExp(r'^[A-Z]{1,2}\s?\d{1,4}\s?[A-Z]{0,3}$');
       final timeRegex = RegExp(r'^\d{2}[:.,]?\d{2}$');
+      final lines = <String>[];
 
       for (final block in result.blocks) {
         for (final line in block.lines) {
-          final text = line.text.trim().toUpperCase();
-          if (plateRegex.hasMatch(text) || timeRegex.hasMatch(text)) {
-            lines.add(text);
+          final txt = line.text.trim().toUpperCase();
+          if (plateRegex.hasMatch(txt) || timeRegex.hasMatch(txt)) {
+            lines.add(txt);
           }
         }
       }
