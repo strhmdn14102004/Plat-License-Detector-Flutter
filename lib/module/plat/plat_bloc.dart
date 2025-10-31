@@ -2,6 +2,7 @@
 
 import 'dart:async';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:bloc/bloc.dart';
 import 'package:camera/camera.dart';
@@ -18,9 +19,11 @@ import 'package:tflite_flutter/tflite_flutter.dart';
 
 class PlateBloc extends Bloc<PlateEvent, PlateState> {
   final YoloService yoloService;
+
   bool _busy = false;
   DateTime _lastProcessed = DateTime.fromMillisecondsSinceEpoch(0);
   DateTime _lastOcr = DateTime.fromMillisecondsSinceEpoch(0);
+
   final int intervalMs = 250;
   Rect? _smoothBox;
 
@@ -114,11 +117,13 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
         return;
       }
 
-      final results = await compute(_detectInIsolate, {
-        'jpeg': jpeg,
-        'modelBytes': yoloService.modelBytes,
-        'inputSize': yoloService.inputSize,
-        'scoreThreshold': yoloService.scoreThreshold,
+      final results = await Isolate.run(() async {
+        return await _detectInIsolate({
+          'jpeg': jpeg,
+          'modelBytes': yoloService.modelBytes,
+          'inputSize': yoloService.inputSize,
+          'scoreThreshold': yoloService.scoreThreshold,
+        });
       });
 
       if (results.isEmpty) {
@@ -161,13 +166,16 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
       );
 
       if (now.difference(_lastOcr).inMilliseconds >=
-          (Platform.isIOS ? 1000 : 1800)) {
+          (Platform.isIOS ? 700 : 1600)) {
         _lastOcr = now;
+        debugPrint('🔍 OCR start...');
         final ocrText = await _runOcrDirect(
           jpeg,
           rawBox,
           yoloService.inputSize,
         );
+        debugPrint('✅ OCR done: $ocrText');
+
         if (ocrText != null && ocrText.isNotEmpty) {
           final list = List<String>.from(state.detectedPlates);
           if (!list.contains(ocrText)) list.add(ocrText);
@@ -211,12 +219,8 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
     final previewSize = controller.value.previewSize!;
     final isIOS = Platform.isIOS;
 
-    final double scaleX = isIOS
-        ? previewSize.width / inputSize
-        : previewSize.width / inputSize;
-    final double scaleY = isIOS
-        ? previewSize.height / inputSize
-        : previewSize.height / inputSize;
+    final double scaleX = previewSize.width / inputSize;
+    final double scaleY = previewSize.height / inputSize;
 
     double left = yoloBox.left * scaleX;
     double top = yoloBox.top * scaleY;
@@ -238,7 +242,10 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
     try {
       var img = imglib.decodeImage(jpeg);
       if (img == null) return null;
-      if (Platform.isIOS) img = imglib.copyRotate(img, angle: 90);
+
+      if (Platform.isIOS && img.height > img.width) {
+        img = imglib.copyRotate(img, angle: 90);
+      }
 
       final sx = img.width / inputSize;
       final sy = img.height / inputSize;
@@ -257,12 +264,13 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
       final tmp = await getTemporaryDirectory();
       final file = File(
         p.join(tmp.path, 'ocr_${DateTime.now().millisecondsSinceEpoch}.jpg'),
-      )..writeAsBytesSync(imglib.encodeJpg(cropped, quality: 95));
+      )..writeAsBytesSync(imglib.encodeJpg(cropped, quality: 95), flush: true);
+
+      await Future.delayed(const Duration(milliseconds: 50));
 
       final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
-      final result = await recognizer.processImage(
-        InputImage.fromFilePath(file.path),
-      );
+      final input = InputImage.fromFile(file);
+      final result = await recognizer.processImage(input);
       await recognizer.close();
       await file.delete().catchError((_) {});
 
@@ -361,7 +369,7 @@ Future<List<YoloResult>> _detectInIsolate(Map<String, dynamic> args) async {
   var img = imglib.decodeImage(jpeg);
   if (img == null) return [];
 
-  if (Platform.isIOS) {
+  if (Platform.isIOS && img.height > img.width) {
     img = imglib.copyRotate(img, angle: 90);
   }
 
