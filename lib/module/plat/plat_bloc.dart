@@ -1,4 +1,4 @@
-// ignore_for_file: depend_on_referenced_packages, invalid_use_of_visible_for_testing_member
+// ignore_for_file: invalid_use_of_visible_for_testing_member, depend_on_referenced_packages
 
 import 'dart:async';
 import 'dart:io';
@@ -145,6 +145,7 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
       );
 
       _smoothBox = _applySmoothing(rect, _smoothBox);
+
       emit(
         PlateState(
           isCameraReady: true,
@@ -157,11 +158,36 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
         ),
       );
 
-      ocrPool.push(jpeg);
-    } catch (e) {
-      debugPrint("Error process: $e");
+      final cropped = await _cropPlateRegion(jpeg, rect, 640);
+      if (cropped != null) ocrPool.push(cropped);
+    } catch (e, st) {
+      debugPrint("Error process: $e\n$st");
     } finally {
       _busy = false;
+    }
+  }
+
+  Future<Uint8List?> _cropPlateRegion(
+    Uint8List jpeg,
+    Rect rect,
+    int inputSize,
+  ) async {
+    try {
+      var img = imglib.decodeImage(jpeg);
+      if (img == null) return null;
+
+      final sx = img.width / inputSize;
+      final sy = img.height / inputSize;
+      int x1 = (rect.left * sx).round().clamp(0, img.width - 1);
+      int y1 = (rect.top * sy).round().clamp(0, img.height - 1);
+      int w = (rect.width * sx).round().clamp(1, img.width - x1);
+      int h = (rect.height * sy).round().clamp(1, img.height - y1);
+
+      final cropped = imglib.copyCrop(img, x: x1, y: y1, width: w, height: h);
+      return Uint8List.fromList(imglib.encodeJpg(cropped, quality: 95));
+    } catch (e) {
+      debugPrint("Crop error: $e");
+      return null;
     }
   }
 
