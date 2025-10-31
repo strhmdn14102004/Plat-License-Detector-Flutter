@@ -9,31 +9,30 @@ import 'package:flutter/material.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
-
   @override
   State<HomePage> createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
-  late final AnimationController _heroCtl;
-  late final Animation<double> _heroScale;
+  late final AnimationController _glowCtl;
+  late final Animation<double> _glowAnim;
 
   @override
   void initState() {
     super.initState();
-    _heroCtl = AnimationController(
+    _glowCtl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1600),
-    )..forward();
-    _heroScale = Tween<double>(
-      begin: 0.96,
-      end: 1.0,
-    ).animate(CurvedAnimation(parent: _heroCtl, curve: Curves.easeOutCubic));
+      duration: const Duration(seconds: 5),
+    )..repeat(reverse: true);
+    _glowAnim = Tween<double>(
+      begin: 0.7,
+      end: 1.2,
+    ).animate(CurvedAnimation(parent: _glowCtl, curve: Curves.easeInOut));
   }
 
   @override
   void dispose() {
-    _heroCtl.dispose();
+    _glowCtl.dispose();
     super.dispose();
   }
 
@@ -41,134 +40,87 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     final isIOS = Platform.isIOS;
     final accelText = isIOS ? "Metal GPU" : "Android NNAPI";
-    final accelIcon = isIOS ? Icons.memory_rounded : Icons.speed_rounded;
 
     return Scaffold(
+      extendBodyBehindAppBar: true,
       body: Stack(
+        fit: StackFit.expand,
         children: [
-          const _Background(),
-
+          const _AnimatedBackground(),
           SafeArea(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const SizedBox(height: 20),
-                  ScaleTransition(
-                    scale: _heroScale,
-                    child: _GlassCard(
-                      padding: const EdgeInsets.fromLTRB(20, 22, 20, 22),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            "License Plate\nScanner",
-                            style: TextStyle(
-                              fontSize: 34,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -0.5,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            "Deteksi plat nomor kendaraan",
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.9),
-                              fontSize: 14.5,
-                              height: 1.35,
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-
-                          Wrap(
-                            spacing: 5,
-                            runSpacing: 5,
-                            children: const [
-                              _ChipInfo(
-                                icon: Icons.flash_on_rounded,
-                                label: "Real-time",
-                              ),
-                              _ChipInfo(
-                                icon: Icons.document_scanner_rounded,
-                                label: "Yolo v11",
-                              ),
-                              _ChipInfo(
-                                icon: Icons.text_fields_rounded,
-                                label: "Google Ml Kit OCR",
-                              ),
-                            ],
-                          ),
-                        ],
+                  const SizedBox(height: 10),
+                  FadeTransition(
+                    opacity: _glowAnim,
+                    child: const Text(
+                      "License Plate\nScanner",
+                      style: TextStyle(
+                        fontSize: 38,
+                        fontWeight: FontWeight.w900,
+                        height: 1.1,
+                        letterSpacing: -0.8,
+                        color: Colors.white,
                       ),
                     ),
                   ),
+                  const SizedBox(height: 10),
+                  const Text(
+                    "Realtime Vehicle Plate Detection with AI",
+                    style: TextStyle(
+                      fontSize: 15.5,
+                      color: Colors.white70,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
 
-                  const SizedBox(height: 18),
+                  _FeatureChips(),
+                  const SizedBox(height: 28),
 
                   _GlassCard(
-                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                    padding: const EdgeInsets.all(18),
                     child: Row(
                       children: [
-                        Icon(accelIcon, size: 22, color: Colors.greenAccent),
-                        const SizedBox(width: 10),
+                        const Icon(
+                          Icons.memory_rounded,
+                          color: Colors.tealAccent,
+                          size: 30,
+                        ),
+                        const SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            "Akselerasi $accelText diaktifkan untuk deteksi lebih cepat.\n"
-                            "Tips: pencahayaan cukup & kamera stabil meningkatkan akurasi.",
-                            style: TextStyle(
-                              fontSize: 13.5,
-                              height: 1.25,
-                              color: Colors.white.withOpacity(0.95),
+                            "Akselerasi $accelText diaktifkan — gunakan cahaya cukup dan posisi stabil untuk akurasi optimal.",
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 13.8,
+                              height: 1.35,
                             ),
                           ),
                         ),
                       ],
                     ),
                   ),
+                  const SizedBox(height: 30),
 
-                  const SizedBox(height: 22),
+                  const _ShimmerButton(),
+                  const SizedBox(height: 18),
 
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _MenuBigButton(
-                          title: "Scan Plat License",
-                          subtitle: "Mulai kamera & deteksi",
-                          icon: Icons.camera_alt_rounded,
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const PlateScanPage(),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
+                  _MainButton(
+                    title: "Lihat Riwayat",
+                    subtitle: "Hasil deteksi & OCR tersimpan",
+                    icon: Icons.list_alt_rounded,
+                    color1: const Color(0xFF3B82F6),
+                    color2: const Color(0xFF60A5FA),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => ViewDataPage()),
+                    ),
                   ),
-
-                  const SizedBox(height: 14),
-
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _MenuBigButtonSecondary(
-                          title: "View Data Scan",
-                          subtitle: "Riwayat hasil OCR",
-                          icon: Icons.list_alt_rounded,
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => ViewDataPage()),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
+                  const SizedBox(height: 30),
                 ],
               ),
             ),
@@ -179,39 +131,72 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 }
 
-class _Background extends StatelessWidget {
-  const _Background();
+class _AnimatedBackground extends StatefulWidget {
+  const _AnimatedBackground();
+
+  @override
+  State<_AnimatedBackground> createState() => _AnimatedBackgroundState();
+}
+
+class _AnimatedBackgroundState extends State<_AnimatedBackground>
+    with TickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _moveAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 12),
+    )..repeat(reverse: true);
+    _moveAnim = Tween<double>(
+      begin: -80,
+      end: 80,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF0F172A), Color(0xFF1E293B), Color(0xFF0B1220)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Stack(
-        children: [
-          Positioned(
-            left: -60,
-            top: -40,
-            child: _Blob(
-              color: const Color(0xFF22D3EE).withOpacity(0.35),
-              size: 180,
+    return AnimatedBuilder(
+      animation: _moveAnim,
+      builder: (context, _) {
+        return Stack(
+          children: [
+            Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF0F172A), Color(0xFF1E293B)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
             ),
-          ),
-          Positioned(
-            right: -40,
-            bottom: -30,
-            child: _Blob(
-              color: const Color(0xFFA78BFA).withOpacity(0.3),
-              size: 160,
+            Positioned(
+              top: _moveAnim.value,
+              left: _moveAnim.value * -1.2,
+              child: _Blob(
+                color: const Color(0xFF14B8A6).withOpacity(0.25),
+                size: 220,
+              ),
             ),
-          ),
-        ],
-      ),
+            Positioned(
+              bottom: -_moveAnim.value,
+              right: _moveAnim.value,
+              child: _Blob(
+                color: const Color(0xFF6366F1).withOpacity(0.28),
+                size: 200,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -225,7 +210,7 @@ class _Blob extends StatelessWidget {
   Widget build(BuildContext context) {
     return ClipOval(
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 60, sigmaY: 60),
+        filter: ImageFilter.blur(sigmaX: 70, sigmaY: 70),
         child: Container(
           width: size,
           height: size,
@@ -244,15 +229,15 @@ class _GlassCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(20),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
         child: Container(
           padding: padding,
           decoration: BoxDecoration(
             color: Colors.white.withOpacity(0.06),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: Colors.white.withOpacity(0.12)),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white.withOpacity(0.1)),
           ),
           child: child,
         ),
@@ -261,44 +246,64 @@ class _GlassCard extends StatelessWidget {
   }
 }
 
-class _ChipInfo extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  const _ChipInfo({required this.icon, required this.label});
-
+class _FeatureChips extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 7),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(100),
-        border: Border.all(color: Colors.white.withOpacity(0.14)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: Colors.white),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
-          ),
-        ],
-      ),
+    final items = [
+      {'icon': Icons.flash_on_rounded, 'label': 'Realtime'},
+      {'icon': Icons.document_scanner_rounded, 'label': 'Yolo v11'},
+      {'icon': Icons.text_fields_rounded, 'label': 'Google ML Kit'},
+      {'icon': Icons.memory_rounded, 'label': 'NNAPI / Metal'},
+    ];
+
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: items
+          .map(
+            (e) => Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(100),
+                border: Border.all(color: Colors.white.withOpacity(0.12)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(e['icon'] as IconData, color: Colors.white, size: 15),
+                  const SizedBox(width: 5),
+                  Text(
+                    e['label'] as String,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12.8,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+          .toList(),
     );
   }
 }
 
-class _MenuBigButton extends StatelessWidget {
+class _MainButton extends StatelessWidget {
   final String title;
   final String subtitle;
   final IconData icon;
+  final Color color1;
+  final Color color2;
   final VoidCallback onTap;
-  const _MenuBigButton({
+
+  const _MainButton({
     required this.title,
     required this.subtitle,
     required this.icon,
+    required this.color1,
+    required this.color2,
     required this.onTap,
   });
 
@@ -306,145 +311,186 @@ class _MenuBigButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
+      borderRadius: BorderRadius.circular(22),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
         height: 140,
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF16A34A), Color(0xFF22C55E)],
+          gradient: LinearGradient(
+            colors: [color1, color2],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(22),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF16A34A).withOpacity(0.35),
-              blurRadius: 22,
+              color: color2.withOpacity(0.35),
+              blurRadius: 24,
               offset: const Offset(0, 10),
             ),
           ],
         ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18),
-          child: Row(
-            children: [
-              Container(
-                width: 62,
-                height: 62,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.14),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Icon(icon, color: Colors.white, size: 32),
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Row(
+          children: [
+            Container(
+              width: 66,
+              height: 66,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(18),
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.3,
-                      ),
+              child: Icon(icon, color: Colors.white, size: 34),
+            ),
+            const SizedBox(width: 18),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 21,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.white,
                     ),
-                    const SizedBox(height: 4),
-                    Opacity(
-                      opacity: 0.92,
-                      child: Text(
-                        subtitle,
-                        style: const TextStyle(fontSize: 13.5),
-                      ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 13.5,
+                      color: Colors.white70,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              const Icon(
-                Icons.arrow_forward_rounded,
-                size: 26,
-                color: Colors.white,
-              ),
-            ],
-          ),
+            ),
+            const Icon(
+              Icons.arrow_forward_rounded,
+              size: 28,
+              color: Colors.white,
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _MenuBigButtonSecondary extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final VoidCallback onTap;
-  const _MenuBigButtonSecondary({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.onTap,
-  });
+class _ShimmerButton extends StatefulWidget {
+  const _ShimmerButton();
+
+  @override
+  State<_ShimmerButton> createState() => _ShimmerButtonState();
+}
+
+class _ShimmerButtonState extends State<_ShimmerButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _shimmerCtl;
+
+  @override
+  void initState() {
+    super.initState();
+    _shimmerCtl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 4),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _shimmerCtl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        height: 120,
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.06),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.white.withOpacity(0.12)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18),
-          child: Row(
-            children: [
-              Container(
-                width: 54,
-                height: 54,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.10),
-                  borderRadius: BorderRadius.circular(14),
+    return AnimatedBuilder(
+      animation: _shimmerCtl,
+      builder: (context, _) {
+        final offset = _shimmerCtl.value;
+        return InkWell(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const PlateScanPage()),
+            );
+          },
+          borderRadius: BorderRadius.circular(22),
+          child: Container(
+            height: 140,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(22),
+              gradient: LinearGradient(
+                begin: Alignment(-1 + offset, 0),
+                end: Alignment(offset + 1, 0),
+                colors: const [
+                  Color(0xFF16A34A),
+                  Color(0xFF4ADE80),
+                  Color(0xFF16A34A),
+                ],
+                stops: const [0.0, 0.5, 1.0],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF4ADE80).withOpacity(0.25),
+                  blurRadius: 25,
+                  spreadRadius: 1,
+                  offset: const Offset(0, 10),
                 ),
-                child: Icon(icon, color: Colors.white, size: 28),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Opacity(
-                      opacity: 0.9,
-                      child: Text(
-                        subtitle,
-                        style: const TextStyle(fontSize: 13.2),
-                      ),
-                    ),
-                  ],
+              ],
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              children: [
+                Container(
+                  width: 66,
+                  height: 66,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: Colors.white.withOpacity(0.15)),
+                  ),
+                  child: const Icon(
+                    Icons.camera_alt_rounded,
+                    color: Colors.white,
+                    size: 34,
+                  ),
                 ),
-              ),
-              const Icon(
-                Icons.arrow_forward_ios_rounded,
-                size: 18,
-                color: Colors.white70,
-              ),
-            ],
+                const SizedBox(width: 18),
+                const Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Mulai Scan",
+                        style: TextStyle(
+                          fontSize: 21,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.white,
+                        ),
+                      ),
+                      SizedBox(height: 5),
+                      Text(
+                        "Deteksi plat kendaraan secara realtime",
+                        style: TextStyle(fontSize: 13.5, color: Colors.white70),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.arrow_forward_rounded,
+                  size: 28,
+                  color: Colors.white,
+                ),
+              ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

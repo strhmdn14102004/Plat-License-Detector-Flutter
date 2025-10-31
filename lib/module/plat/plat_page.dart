@@ -1,4 +1,4 @@
-// ignore_for_file: deprecated_member_use, use_build_context_synchronously
+// ignore_for_file: curly_braces_in_flow_control_structures, deprecated_member_use, use_build_context_synchronously
 
 import 'dart:ui';
 
@@ -109,21 +109,22 @@ class _PlateScanPageState extends State<PlateScanPage>
         listener: (context, state) {
           if (state.lastText != null) {
             final text = state.lastText!.trim();
-            final lines = text.split('\n');
+            final lines = text.split('\n').map((e) => e.trim()).toList();
+
             final plateRegex = RegExp(r'^[A-Z]{1,2}\s?\d{1,4}\s?[A-Z]{0,3}$');
             final timeRegex = RegExp(r'^\d{2}[:.,]?\d{2}$');
-            final plate = lines.firstWhere(
-              (l) => plateRegex.hasMatch(l),
-              orElse: () => '',
-            );
-            final time = lines.firstWhere(
-              (l) => timeRegex.hasMatch(l),
-              orElse: () => '',
-            );
 
-            if (plate.isNotEmpty) {
-              final cleanText = time.isNotEmpty ? '$plate\n$time' : plate;
+            String? plate;
+            String? time;
+            for (final l in lines) {
+              if (plate == null && plateRegex.hasMatch(l)) {
+                plate = l;
+              } else if (time == null && timeRegex.hasMatch(l))
+                time = l;
+            }
 
+            if (plate != null && time != null) {
+              final cleanText = '$plate\n$time';
               if (!_savedPlates.contains(cleanText)) {
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   _showSaveBottomSheet(context, cleanText);
@@ -172,7 +173,7 @@ class _PlateScanPageState extends State<PlateScanPage>
                       const _FocusOverlay(),
 
                       Positioned(
-                        top: kToolbarHeight + 25,
+                        top: kToolbarHeight + 40,
                         left: 20,
                         right: 20,
                         child: _HudStatus(
@@ -303,8 +304,11 @@ class _PlateScanPageState extends State<PlateScanPage>
                 children: [
                   Expanded(
                     child: ElevatedButton.icon(
-                      icon: const Icon(Icons.save),
-                      label: const Text('Simpan'),
+                      icon: const Icon(Icons.save, color: Colors.white),
+                      label: const Text(
+                        'Simpan',
+                        style: TextStyle(color: Colors.white),
+                      ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green,
                         padding: const EdgeInsets.symmetric(vertical: 14),

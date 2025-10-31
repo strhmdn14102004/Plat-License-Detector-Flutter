@@ -28,60 +28,61 @@ class _ViewDataPageState extends State<ViewDataPage> {
       extendBodyBehindAppBar: true,
       backgroundColor: const Color(0xFF0E1621),
       appBar: AppBar(
-        title: const Text("Data Hasil Scan"),
-        backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
+
+        title: const Text(
+          "Riwayat Hasil Scan",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded),
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
       ),
       body: Stack(
         children: [
-          const _Background(),
+          const _AnimatedBackground(),
           SafeArea(
             child: ValueListenableBuilder(
               valueListenable: _box.listenable(),
               builder: (context, Box box, _) {
-                final List<String> scannedData = List<String>.from(
+                final List<String> data = List<String>.from(
                   box.get('data', defaultValue: []),
                 );
 
-                if (scannedData.isEmpty) {
-                  return const _EmptyState();
-                }
+                if (data.isEmpty) return const _EmptyState();
 
                 return Column(
                   children: [
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                      padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
                       child: _GlassCard(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 14,
-                        ),
+                        padding: const EdgeInsets.all(14),
                         child: Row(
                           children: [
                             const Icon(
-                              Icons.fact_check_rounded,
-                              color: Colors.lightGreenAccent,
-                              size: 20,
+                              Icons.history_rounded,
+                              color: Colors.tealAccent,
+                              size: 26,
                             ),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                "Total hasil scan: ${scannedData.length}",
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.95),
+                                "Total hasil scan: ${data.length}",
+                                style: const TextStyle(
+                                  color: Colors.white,
                                   fontSize: 14.5,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ),
-                            _ActionTextButton(
+                            _ActionButton(
                               icon: Icons.copy_all_rounded,
                               label: "Salin semua",
                               onTap: () async {
-                                final text = scannedData.join('\n\n');
                                 await Clipboard.setData(
-                                  ClipboardData(text: text),
+                                  ClipboardData(text: data.join('\n\n')),
                                 );
                                 _toast(context, "Disalin ke clipboard");
                               },
@@ -92,33 +93,38 @@ class _ViewDataPageState extends State<ViewDataPage> {
                     ),
                     Expanded(
                       child: ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                        itemCount: scannedData.length,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 10,
+                        ),
+                        itemCount: data.length,
                         itemBuilder: (context, i) {
-                          final raw = scannedData[i];
+                          final raw = data[i];
                           final parts = raw.split('\n');
                           final plate = parts.isNotEmpty ? parts[0] : raw;
                           final time = parts.length > 1 ? parts[1] : '';
 
-                          return Dismissible(
-                            key: ValueKey("plate_${i}_$raw"),
-                            direction: DismissDirection.endToStart,
-                            background: _deleteBg(),
-                            onDismissed: (_) async {
-                              final updated = List<String>.from(scannedData);
-                              updated.removeAt(i);
-                              await box.put('data', updated);
-                              _toast(context, "Item dihapus");
-                            },
-                            child: Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
+                          return AnimatedContainer(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeOutCubic,
+                            margin: const EdgeInsets.only(bottom: 12),
+                            child: Dismissible(
+                              key: ValueKey("plate_${i}_$raw"),
+                              direction: DismissDirection.endToStart,
+                              background: _deleteBg(),
+                              onDismissed: (_) async {
+                                final updated = List<String>.from(data);
+                                updated.removeAt(i);
+                                await box.put('data', updated);
+                                _toast(context, "Item dihapus");
+                              },
                               child: _GlassCard(
-                                padding: const EdgeInsets.all(14),
+                                padding: const EdgeInsets.all(16),
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.center,
                                   children: [
-                                    _PlateBadge(text: plate),
-                                    const SizedBox(width: 12),
+                                    _PlateBadge(plate: plate),
+                                    const SizedBox(width: 16),
                                     Expanded(
                                       child: Column(
                                         crossAxisAlignment:
@@ -126,31 +132,26 @@ class _ViewDataPageState extends State<ViewDataPage> {
                                         children: [
                                           Text(
                                             plate,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
                                             style: const TextStyle(
                                               fontSize: 18,
-                                              fontWeight: FontWeight.w800,
-                                              letterSpacing: 0.2,
+                                              fontWeight: FontWeight.w700,
+                                              color: Colors.white,
                                             ),
                                           ),
-                                          const SizedBox(height: 6),
+                                          const SizedBox(height: 5),
                                           Row(
                                             children: [
                                               const Icon(
                                                 Icons.schedule_rounded,
-                                                size: 16,
+                                                size: 14,
                                                 color: Colors.white70,
                                               ),
-                                              const SizedBox(width: 6),
-                                              Text("Register : "),
-                                              const SizedBox(width: 6),
-
+                                              const SizedBox(width: 4),
                                               Text(
                                                 time.isEmpty ? "-" : time,
                                                 style: const TextStyle(
-                                                  fontSize: 13.5,
                                                   color: Colors.white70,
+                                                  fontSize: 13,
                                                 ),
                                               ),
                                             ],
@@ -158,12 +159,12 @@ class _ViewDataPageState extends State<ViewDataPage> {
                                         ],
                                       ),
                                     ),
-                                    const SizedBox(width: 8),
+                                    const SizedBox(width: 6),
                                     IconButton(
                                       tooltip: "Salin",
                                       icon: const Icon(
                                         Icons.copy_rounded,
-                                        color: Colors.white,
+                                        color: Colors.white70,
                                       ),
                                       onPressed: () async {
                                         await Clipboard.setData(
@@ -179,11 +180,10 @@ class _ViewDataPageState extends State<ViewDataPage> {
                                         color: Colors.redAccent,
                                       ),
                                       onPressed: () async {
-                                        final updated = List<String>.from(
-                                          scannedData,
-                                        );
+                                        final updated = List<String>.from(data);
                                         updated.removeAt(i);
                                         await box.put('data', updated);
+                                        _toast(context, "Dihapus");
                                       },
                                     ),
                                   ],
@@ -204,24 +204,18 @@ class _ViewDataPageState extends State<ViewDataPage> {
       floatingActionButton: ValueListenableBuilder(
         valueListenable: _box.listenable(),
         builder: (context, Box box, _) {
-          final List<String> scannedData = List<String>.from(
+          final List<String> data = List<String>.from(
             box.get('data', defaultValue: []),
           );
-          if (scannedData.isEmpty) return const SizedBox.shrink();
+          if (data.isEmpty) return const SizedBox.shrink();
 
-          return FloatingActionButton.extended(
-            backgroundColor: const Color(0xFFE11D48),
-            icon: const Icon(Icons.delete_forever_rounded, color: Colors.white),
-            label: const Text(
-              "Hapus Semua",
-              style: TextStyle(color: Colors.white),
-            ),
-            onPressed: () async {
+          return _DeleteAllButton(
+            onConfirm: () async {
               final ok = await _confirm(
                 context,
                 title: "Hapus semua data?",
                 subtitle:
-                    "Tindakan ini tidak dapat dibatalkan. Semua hasil scan akan dihapus.",
+                    "Tindakan ini tidak dapat dibatalkan. Semua hasil scan akan hilang.",
               );
               if (ok) {
                 await box.delete('data');
@@ -243,23 +237,30 @@ class _ViewDataPageState extends State<ViewDataPage> {
     await showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        backgroundColor: const Color(0xFF111827),
+        backgroundColor: const Color(0xFF1E293B),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           title,
-          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
         ),
-        content: Text(subtitle, style: const TextStyle(color: Colors.white70)),
+        content: Text(
+          subtitle,
+          style: const TextStyle(color: Colors.white70, fontSize: 14),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("Batal"),
+            child: const Text("Batal", style: TextStyle(color: Colors.white70)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFE11D48),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(12),
               ),
             ),
             onPressed: () {
@@ -274,62 +275,89 @@ class _ViewDataPageState extends State<ViewDataPage> {
     return result;
   }
 
-  Widget _deleteBg() {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF7F1D1D).withOpacity(0.9),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      alignment: Alignment.centerRight,
-      padding: const EdgeInsets.symmetric(horizontal: 22),
-      child: const Icon(
-        Icons.delete_forever_rounded,
-        size: 30,
-        color: Colors.white,
-      ),
-    );
-  }
-
   void _toast(BuildContext context, String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(msg, style: TextStyle(color: Colors.white)),
+        content: Text(
+          msg,
+          style: const TextStyle(color: Colors.white, fontSize: 14),
+        ),
         behavior: SnackBarBehavior.floating,
-        backgroundColor: Colors.grey,
+        backgroundColor: Colors.black.withOpacity(0.8),
       ),
     );
   }
+
+  Widget _deleteBg() => Container(
+    decoration: BoxDecoration(
+      color: const Color(0xFFE11D48).withOpacity(0.9),
+      borderRadius: BorderRadius.circular(18),
+    ),
+    alignment: Alignment.centerRight,
+    padding: const EdgeInsets.symmetric(horizontal: 22),
+    child: const Icon(
+      Icons.delete_forever_rounded,
+      color: Colors.white,
+      size: 30,
+    ),
+  );
 }
 
-class _Background extends StatelessWidget {
-  const _Background();
+class _AnimatedBackground extends StatefulWidget {
+  const _AnimatedBackground();
+
+  @override
+  State<_AnimatedBackground> createState() => _AnimatedBackgroundState();
+}
+
+class _AnimatedBackgroundState extends State<_AnimatedBackground>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 10),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF0B1220), Color(0xFF111827), Color(0xFF0B1220)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Stack(
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (_, _) => Stack(
         children: [
-          Positioned(
-            left: -60,
-            top: -40,
-            child: _Blob(
-              color: const Color(0xFF22D3EE).withOpacity(0.35),
-              size: 180,
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF0B1220), Color(0xFF1E293B)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
             ),
           ),
           Positioned(
-            right: -50,
-            bottom: -40,
+            top: -50 + 50 * _controller.value,
+            left: -60,
+            child: _Blob(
+              color: const Color(0xFF22D3EE).withOpacity(0.35),
+              size: 200,
+            ),
+          ),
+          Positioned(
+            bottom: -30 - 30 * _controller.value,
+            right: -40,
             child: _Blob(
               color: const Color(0xFF34D399).withOpacity(0.3),
-              size: 160,
+              size: 180,
             ),
           ),
         ],
@@ -344,14 +372,12 @@ class _Blob extends StatelessWidget {
   const _Blob({required this.color, required this.size});
 
   @override
-  Widget build(BuildContext context) {
-    return ClipOval(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 60, sigmaY: 60),
-        child: Container(width: size, height: size, color: color),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => ClipOval(
+    child: BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 60, sigmaY: 60),
+      child: Container(width: size, height: size, color: color),
+    ),
+  );
 }
 
 class _GlassCard extends StatelessWidget {
@@ -360,114 +386,149 @@ class _GlassCard extends StatelessWidget {
   const _GlassCard({required this.padding, required this.child});
 
   @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          padding: padding,
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.06),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withOpacity(0.12)),
-          ),
-          child: child,
+  Widget build(BuildContext context) => ClipRRect(
+    borderRadius: BorderRadius.circular(18),
+    child: BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+      child: Container(
+        padding: padding,
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.06),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Colors.white.withOpacity(0.1)),
         ),
+        child: child,
       ),
-    );
-  }
+    ),
+  );
 }
 
 class _PlateBadge extends StatelessWidget {
-  final String text;
-  const _PlateBadge({required this.text});
+  final String plate;
+  const _PlateBadge({required this.plate});
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 44,
-      height: 44,
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF16A34A), Color(0xFF22C55E)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF16A34A).withOpacity(0.35),
-            blurRadius: 14,
-            offset: const Offset(0, 8),
-          ),
-        ],
+  Widget build(BuildContext context) => Container(
+    width: 48,
+    height: 48,
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(
+        colors: [Color(0xFF16A34A), Color(0xFF4ADE80)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
       ),
-      child: const Icon(Icons.directions_car_rounded, color: Colors.white),
-    );
-  }
+      borderRadius: BorderRadius.circular(14),
+      boxShadow: [
+        BoxShadow(
+          color: const Color(0xFF16A34A).withOpacity(0.3),
+          blurRadius: 15,
+          offset: const Offset(0, 8),
+        ),
+      ],
+    ),
+    child: const Icon(
+      Icons.directions_car_rounded,
+      color: Colors.white,
+      size: 26,
+    ),
+  );
 }
 
-class _ActionTextButton extends StatelessWidget {
+class _ActionButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-  const _ActionTextButton({
+  const _ActionButton({
     required this.icon,
     required this.label,
     required this.onTap,
   });
 
   @override
-  Widget build(BuildContext context) {
-    return TextButton.icon(
-      style: TextButton.styleFrom(
-        foregroundColor: Colors.white.withOpacity(0.95),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+  Widget build(BuildContext context) => TextButton.icon(
+    style: TextButton.styleFrom(
+      foregroundColor: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+    ),
+    onPressed: onTap,
+    icon: Icon(icon, size: 18, color: Colors.white),
+    label: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+  );
+}
+
+class _DeleteAllButton extends StatelessWidget {
+  final VoidCallback onConfirm;
+  const _DeleteAllButton({required this.onConfirm});
+
+  @override
+  Widget build(BuildContext context) => FloatingActionButton.extended(
+    backgroundColor: Colors.transparent,
+    elevation: 0,
+    onPressed: onConfirm,
+    label: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFE11D48), Color(0xFFFB7185)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(30),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFE11D48).withOpacity(0.4),
+            blurRadius: 25,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
-      onPressed: onTap,
-      icon: Icon(icon, size: 18, color: Colors.white),
-      label: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
-    );
-  }
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.delete_forever_rounded, color: Colors.white, size: 22),
+          SizedBox(width: 8),
+          Text(
+            "Hapus Semua",
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 class _EmptyState extends StatelessWidget {
   const _EmptyState();
 
   @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 28),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.inbox_outlined, size: 72, color: Colors.white30),
-            const SizedBox(height: 14),
-            const Text(
-              "Belum ada data hasil scan",
-              style: TextStyle(
-                color: Colors.white70,
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-              ),
+  Widget build(BuildContext context) => Center(
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 28),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.inbox_rounded, size: 80, color: Colors.white30),
+          const SizedBox(height: 14),
+          const Text(
+            "Belum ada data hasil scan",
+            style: TextStyle(
+              color: Colors.white70,
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 10),
+          Opacity(
+            opacity: 0.85,
+            child: Text(
+              "Mulai dari halaman scan untuk menangkap plat kendaraan dan menyimpannya ke riwayat.",
+              style: const TextStyle(color: Colors.white60, fontSize: 14),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 8),
-            Opacity(
-              opacity: 0.85,
-              child: Text(
-                "Mulai dari halaman Scan untuk menangkap plat "
-                "dan menyimpannya ke riwayat.",
-                style: const TextStyle(color: Colors.white60, fontSize: 14.5),
-                textAlign: TextAlign.center,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
 }
