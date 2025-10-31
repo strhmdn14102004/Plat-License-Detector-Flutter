@@ -1,6 +1,7 @@
+// ignore_for_file: depend_on_referenced_packages, body_might_complete_normally_catch_error
 import 'dart:async';
 import 'dart:io';
-import 'dart:isolate';
+
 import 'package:bloc/bloc.dart';
 import 'package:camera/camera.dart';
 import 'package:face_recognition/module/plat/plat_event.dart';
@@ -12,7 +13,6 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:image/image.dart' as imglib;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-import 'package:tflite_flutter/tflite_flutter.dart';
 
 class PlateBloc extends Bloc<PlateEvent, PlateState> {
   final YoloService yoloService;
@@ -20,8 +20,6 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
   bool _busy = false;
   DateTime _lastProcessed = DateTime.fromMillisecondsSinceEpoch(0);
   DateTime _lastOcr = DateTime.fromMillisecondsSinceEpoch(0);
-
-  final int intervalMs = 250;
   Rect? _smoothBox;
 
   PlateBloc({required this.yoloService})
@@ -101,7 +99,7 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
   ) async {
     final now = DateTime.now();
     if (!state.isCameraReady || ev.controller.value.isTakingPicture) return;
-    if (now.difference(_lastProcessed).inMilliseconds < intervalMs) return;
+    if (now.difference(_lastProcessed).inMilliseconds < 180) return;
     if (_busy) return;
 
     _busy = true;
@@ -114,6 +112,7 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
         return;
       }
 
+      // Jalankan YOLO di isolate (GPU aktif di iOS)
       final results = await yoloService.detectFromImageBytes(jpeg);
       if (results.isEmpty) {
         _busy = false;
@@ -150,37 +149,36 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
           lastBox: _smoothBox,
           lastText: state.lastText,
           detectedPlates: state.detectedPlates,
-          message: 'Plat terdeteksi ${(top.score * 100).toStringAsFixed(1)}%',
+          message: 'Plat ${(top.score * 100).toStringAsFixed(1)}%',
         ),
       );
 
       if (now.difference(_lastOcr).inMilliseconds >=
           (Platform.isIOS ? 700 : 1600)) {
         _lastOcr = now;
-        debugPrint('🔍 OCR start...');
-        final ocrText = await _runOcrDirect(
-          jpeg,
-          rawBox,
-          yoloService.inputSize,
-        );
-        debugPrint('✅ OCR done: $ocrText');
-
-        if (ocrText != null && ocrText.isNotEmpty) {
-          final list = List<String>.from(state.detectedPlates);
-          if (!list.contains(ocrText)) list.add(ocrText);
-
-          emit(
-            PlateState(
-              isCameraReady: state.isCameraReady,
-              controller: state.controller,
-              isProcessing: false,
-              lastBox: _smoothBox,
-              lastText: ocrText,
-              detectedPlates: list,
-              message: 'Plat terbaca:\n$ocrText',
-            ),
+        Future.microtask(() async {
+          final ocrText = await _runOcrDirect(
+            jpeg,
+            rawBox,
+            yoloService.inputSize,
           );
-        }
+          if (ocrText != null && ocrText.isNotEmpty) {
+            final list = List<String>.from(state.detectedPlates);
+            if (!list.contains(ocrText)) list.add(ocrText);
+
+            emit(
+              PlateState(
+                isCameraReady: state.isCameraReady,
+                controller: state.controller,
+                isProcessing: false,
+                lastBox: _smoothBox,
+                lastText: ocrText,
+                detectedPlates: list,
+                message: 'Plat terbaca:\n$ocrText',
+              ),
+            );
+          }
+        });
       }
     } catch (e, st) {
       debugPrint('error di process: $e\n$st');
@@ -207,7 +205,6 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
   }) {
     final previewSize = controller.value.previewSize!;
     final isIOS = Platform.isIOS;
-
     final double scaleX = previewSize.width / inputSize;
     final double scaleY = previewSize.height / inputSize;
 
@@ -223,7 +220,6 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
       final rotatedH = width;
       return Rect.fromLTWH(rotatedLeft, rotatedTop, rotatedW, rotatedH);
     }
-
     return Rect.fromLTWH(left, top, width, height);
   }
 
@@ -231,31 +227,23 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
     try {
       var img = imglib.decodeImage(jpeg);
       if (img == null) return null;
-
       if (Platform.isIOS && img.height > img.width) {
         img = imglib.copyRotate(img, angle: 90);
       }
 
       final sx = img.width / inputSize;
       final sy = img.height / inputSize;
-
       int x1 = (box.left * sx).round();
       int y1 = (box.top * sy).round();
       int w = (box.width * sx).round();
       int h = (box.height * sy).round();
 
-      x1 = x1.clamp(0, img.width - 1);
-      y1 = y1.clamp(0, img.height - 1);
-      w = w.clamp(10, img.width - x1);
-      h = h.clamp(10, img.height - y1);
-
       final cropped = imglib.copyCrop(img, x: x1, y: y1, width: w, height: h);
       final tmp = await getTemporaryDirectory();
       final file = File(
         p.join(tmp.path, 'ocr_${DateTime.now().millisecondsSinceEpoch}.jpg'),
-      )..writeAsBytesSync(imglib.encodeJpg(cropped, quality: 95), flush: true);
-
-      await Future.delayed(const Duration(milliseconds: 50));
+      )..writeAsBytesSync(imglib.encodeJpg(cropped, quality: 90), flush: true);
+      await Future.delayed(const Duration(milliseconds: 40));
 
       final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
       final input = InputImage.fromFile(file);
@@ -263,21 +251,14 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
       await recognizer.close();
       await file.delete().catchError((_) {});
 
-      final plateRegex = RegExp(r'^[A-Z]{1,2}\s?\d{1,4}\s?[A-Z]{0,3}$');
-      final timeRegex = RegExp(r'^\d{2}[:.,]?\d{2}$');
-      final lines = <String>[];
-
+      final buffer = <String>[];
       for (final block in result.blocks) {
         for (final line in block.lines) {
           final txt = line.text.trim().toUpperCase();
-          if (plateRegex.hasMatch(txt) || timeRegex.hasMatch(txt)) {
-            lines.add(txt);
-          }
+          if (txt.isNotEmpty) buffer.add(txt);
         }
       }
-
-      if (lines.isEmpty) return null;
-      return lines.take(2).join('\n');
+      return buffer.isEmpty ? null : buffer.take(2).join('\n');
     } catch (e, st) {
       debugPrint('OCR error: $e\n$st');
       return null;
@@ -294,34 +275,9 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
           bytes: plane.bytes.buffer,
           order: imglib.ChannelOrder.bgra,
         );
-        return Uint8List.fromList(imglib.encodeJpg(img, quality: 70));
+        return Uint8List.fromList(imglib.encodeJpg(img, quality: 60));
       } else {
-        final width = image.width;
-        final height = image.height;
-        final yPlane = image.planes[0];
-        final uPlane = image.planes[1];
-        final vPlane = image.planes[2];
-        final yRowStride = yPlane.bytesPerRow;
-        final uvRowStride = uPlane.bytesPerRow;
-        final uvPixelStride = uPlane.bytesPerPixel ?? 1;
-        final img = imglib.Image(width: width, height: height);
-
-        for (int y = 0; y < height; y++) {
-          for (int x = 0; x < width; x++) {
-            final yIndex = y * yRowStride + x;
-            final uvIndex = (y ~/ 2) * uvRowStride + (x ~/ 2) * uvPixelStride;
-            final yp = yPlane.bytes[yIndex];
-            final up = uPlane.bytes[uvIndex];
-            final vp = vPlane.bytes[uvIndex];
-            int r = (yp + 1.370705 * (vp - 128)).clamp(0, 255).toInt();
-            int g = (yp - 0.337633 * (up - 128) - 0.698001 * (vp - 128))
-                .clamp(0, 255)
-                .toInt();
-            int b = (yp + 1.732446 * (up - 128)).clamp(0, 255).toInt();
-            img.setPixelRgba(x, y, r, g, b, 255);
-          }
-        }
-        return Uint8List.fromList(imglib.encodeJpg(img, quality: 70));
+        return null;
       }
     } catch (e) {
       debugPrint('convert error: $e');
