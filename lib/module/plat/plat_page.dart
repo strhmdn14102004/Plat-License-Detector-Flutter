@@ -1,4 +1,6 @@
-// ignore_for_file: use_build_context_synchronously, deprecated_member_use
+// ignore_for_file: deprecated_member_use, use_build_context_synchronously
+
+import 'dart:ui';
 
 import 'package:camera/camera.dart';
 import 'package:face_recognition/module/plat/plat_bloc.dart';
@@ -19,282 +21,238 @@ class _PlateScanPageState extends State<PlateScanPage>
   CameraDescription? _selectedCamera;
   bool _initialized = false;
   bool _scanning = false;
+  bool _wasScanningBeforePause = false;
+
+  late PlateBloc _bloc;
+  bool _blocBound = false;
+
   final List<String> _savedPlates = [];
+
+  static const bool kShowDebugBox = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_blocBound) {
+      _bloc = context.read<PlateBloc>();
+      _blocBound = true;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _loadCameras().then((_) {
       if (_selectedCamera != null) {
-        Future.delayed(const Duration(milliseconds: 400), () {
-          context.read<PlateBloc>().add(StartCamera(_selectedCamera!));
-          setState(() => _scanning = true);
-        });
+        setState(() => _initialized = true);
       }
     });
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!mounted) return;
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused) {
+      _wasScanningBeforePause = _scanning;
+      if (_scanning) _stopScan();
+    } else if (state == AppLifecycleState.resumed) {
+      if (_wasScanningBeforePause && _selectedCamera != null) {
+        _startScan();
+      }
+    }
+  }
+
+  @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    context.read<PlateBloc>().add(StopCamera());
-    Future.delayed(const Duration(milliseconds: 200), () {
-      if (mounted) super.dispose();
-    });
+    _bloc.add(StopCamera());
+    super.dispose();
   }
 
   Future<void> _loadCameras() async {
     try {
-      WidgetsFlutterBinding.ensureInitialized();
       final cameras = await availableCameras();
       _selectedCamera = cameras.firstWhere(
         (c) => c.lensDirection == CameraLensDirection.back,
         orElse: () => cameras.first,
       );
-      if (mounted) setState(() => _initialized = true);
     } catch (e) {
       debugPrint("Camera error: $e");
     }
   }
 
-  void _startScan() async {
-    if (_selectedCamera == null) return;
-    await Future.delayed(const Duration(milliseconds: 100));
-    context.read<PlateBloc>().add(StartCamera(_selectedCamera!));
-    setState(() => _scanning = true);
+  Future<void> _startScan() async {
+    if (_selectedCamera == null || _scanning) return;
+    await Future.delayed(const Duration(milliseconds: 120));
+    _bloc.add(StartCamera(_selectedCamera!));
+    if (mounted) setState(() => _scanning = true);
   }
 
   void _stopScan() {
-    context.read<PlateBloc>().add(StopCamera());
-    setState(() => _scanning = false);
+    if (!_scanning) return;
+    _bloc.add(StopCamera());
+    if (mounted) setState(() => _scanning = false);
   }
+
+  void _toggleScan() => _scanning ? _stopScan() : _startScan();
 
   @override
   Widget build(BuildContext context) {
-    return BlocConsumer<PlateBloc, PlateState>(
-      listener: (context, state) {
-        if (state.lastText != null) {
-          final text = state.lastText!.trim();
-          final lines = text.split('\n');
-          final plateRegex = RegExp(r'^[A-Z]{1,2}\s?\d{1,4}\s?[A-Z]{0,3}$');
-          final hasPlate = lines.any((l) => plateRegex.hasMatch(l));
-          if (hasPlate && !_savedPlates.contains(text)) {
-            _showSaveBottomSheet(context, text);
-          }
-        }
+    return PopScope(
+      canPop: true,
+      onPopInvoked: (didPop) {
+        if (!didPop) _stopScan();
       },
-      builder: (context, state) {
-        final controller = state.controller;
-        return Scaffold(
-          backgroundColor: Colors.black,
-          extendBodyBehindAppBar: true,
-          appBar: AppBar(
-            title: const Text("License Plate Scanner"),
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            centerTitle: true,
-          ),
-          body: !_initialized
-              ? const Center(child: CircularProgressIndicator())
-              : Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    if (_scanning &&
-                        state.isCameraReady &&
-                        controller != null &&
-                        controller.value.isInitialized)
-                      _buildCameraPreview(controller, state)
-                    else
-                      _buildIdlePlaceholder(),
-                    Positioned(
-                      bottom: 50,
-                      left: 0,
-                      right: 0,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          _circleButton(
-                            icon: Icons.play_arrow_rounded,
-                            color: Colors.greenAccent,
-                            onTap: _scanning ? null : _startScan,
-                          ),
-                          const SizedBox(width: 30),
-                          _circleButton(
-                            icon: Icons.stop_rounded,
-                            color: Colors.redAccent,
-                            onTap: _scanning ? _stopScan : null,
-                          ),
-                          const SizedBox(width: 30),
-                          _circleButton(
-                            icon: Icons.camera_alt_rounded,
-                            color: Colors.blueAccent,
-                            onTap: _scanning
-                                ? () => context.read<PlateBloc>().add(
-                                    ManualScanTrigger(),
-                                  )
-                                : null,
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (_savedPlates.isNotEmpty)
+      child: BlocConsumer<PlateBloc, PlateState>(
+        listener: (context, state) {
+          if (state.lastText != null) {
+            final text = state.lastText!.trim();
+            final lines = text.split('\n');
+            final plateRegex = RegExp(r'^[A-Z]{1,2}\s?\d{1,4}\s?[A-Z]{0,3}$');
+            final timeRegex = RegExp(r'^\d{2}[:.,]?\d{2}$');
+            final plate = lines.firstWhere(
+              (l) => plateRegex.hasMatch(l),
+              orElse: () => '',
+            );
+            final time = lines.firstWhere(
+              (l) => timeRegex.hasMatch(l),
+              orElse: () => '',
+            );
+
+            if (plate.isNotEmpty) {
+              final cleanText = time.isNotEmpty ? '$plate\n$time' : plate;
+
+              if (!_savedPlates.contains(cleanText)) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _showSaveBottomSheet(context, cleanText);
+                });
+              }
+            }
+          }
+        },
+        builder: (context, state) {
+          final controller = state.controller;
+          return Scaffold(
+            backgroundColor: const Color(0xFF0B1220),
+            extendBodyBehindAppBar: true,
+            appBar: AppBar(
+              title: const Text("License Plate Scanner"),
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              centerTitle: true,
+              leading: IconButton(
+                icon: const Icon(Icons.turn_left_rounded),
+                onPressed: () {
+                  _stopScan();
+                  Navigator.of(context).maybePop();
+                },
+              ),
+            ),
+            body: !_initialized
+                ? const Center(child: CircularProgressIndicator())
+                : Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      _GradientBackground(),
+
+                      if (_scanning &&
+                          state.isCameraReady &&
+                          controller != null &&
+                          controller.value.isInitialized)
+                        _CameraLayer(
+                          controller: controller,
+                          state: state,
+                          showBox: kShowDebugBox,
+                        )
+                      else
+                        const _IdleLayer(),
+
+                      const _FocusOverlay(),
+
                       Positioned(
-                        bottom: 140,
+                        top: kToolbarHeight + 25,
+                        left: 20,
+                        right: 20,
+                        child: _HudStatus(
+                          scanning: _scanning,
+                          isReady: state.isCameraReady,
+                          message: state.message,
+                        ),
+                      ),
+
+                      const Positioned(
+                        bottom: 120,
+                        left: 16,
+                        right: 16,
+                        child: _GpuHint(),
+                      ),
+
+                      Positioned(
+                        bottom: 40,
                         left: 0,
                         right: 0,
                         child: Center(
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 400),
-                            padding: const EdgeInsets.all(14),
-                            margin: const EdgeInsets.symmetric(horizontal: 20),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.4),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: Colors.white.withOpacity(0.15),
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.greenAccent.withOpacity(0.2),
-                                  blurRadius: 10,
-                                  spreadRadius: 2,
-                                ),
-                              ],
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Text(
-                                  'Hasil Scan Terakhir',
-                                  style: TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  _savedPlates.last,
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 20,
-                                    letterSpacing: 1.1,
-                                  ),
-                                ),
-                              ],
-                            ),
+                          child: _toggleButton(
+                            scanning: _scanning,
+                            onTap: _toggleScan,
                           ),
                         ),
                       ),
-                  ],
-                ),
-        );
-      },
+
+                      if (_savedPlates.isNotEmpty)
+                        Positioned(
+                          bottom: 190,
+                          left: 16,
+                          right: 16,
+                          child: _LastResultToast(text: _savedPlates.last),
+                        ),
+                    ],
+                  ),
+          );
+        },
+      ),
     );
   }
 
-  Widget _circleButton({
-    required IconData icon,
-    required Color color,
-    required VoidCallback? onTap,
+  static Widget _toggleButton({
+    required bool scanning,
+    required VoidCallback onTap,
   }) {
+    final color = scanning ? Colors.redAccent : Colors.greenAccent;
+    final icon = scanning ? Icons.stop_rounded : Icons.play_arrow_rounded;
+    final label = scanning ? "Stop" : "Start";
+
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        height: 70,
-        width: 70,
+        padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 16),
         decoration: BoxDecoration(
-          color: onTap == null ? Colors.white10 : color.withOpacity(0.2),
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: onTap == null ? Colors.white24 : color.withOpacity(0.9),
-            width: 2,
-          ),
+          color: color.withOpacity(0.16),
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: color.withOpacity(0.9), width: 1.8),
           boxShadow: [
-            if (onTap != null)
-              BoxShadow(
-                color: color.withOpacity(0.5),
-                blurRadius: 15,
-                spreadRadius: 2,
-              ),
+            BoxShadow(
+              color: color.withOpacity(0.45),
+              blurRadius: 18,
+              spreadRadius: 2,
+            ),
           ],
         ),
-        child: Icon(
-          icon,
-          color: onTap == null ? Colors.white30 : color,
-          size: 32,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCameraPreview(CameraController controller, PlateState state) {
-    final previewSize = controller.value.previewSize!;
-    return Stack(
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: Center(
-            child: FittedBox(
-              fit: BoxFit.cover,
-              child: SizedBox(
-                width: previewSize.height,
-                height: previewSize.width,
-                child: CameraPreview(controller),
-              ),
-            ),
-          ),
-        ),
-        if (state.lastBox != null)
-          AnimatedPositioned(
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeOutCubic,
-            left: state.lastBox!.left,
-            top: state.lastBox!.top,
-            width: state.lastBox!.width,
-            height: state.lastBox!.height,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              decoration: BoxDecoration(
-                border: Border.all(
-                  color: Colors.greenAccent.withOpacity(0.9),
-                  width: 3,
-                ),
-                borderRadius: BorderRadius.circular(10),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.greenAccent.withOpacity(0.3),
-                    blurRadius: 15,
-                    spreadRadius: 3,
-                  ),
-                ],
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildIdlePlaceholder() {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: const Center(
-        child: Column(
+        child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.camera_alt_outlined, color: Colors.white54, size: 100),
-            SizedBox(height: 16),
+            Icon(icon, size: 20, color: color),
+            const SizedBox(width: 6),
             Text(
-              'Tekan tombol Start untuk memulai scan',
-              style: TextStyle(color: Colors.white70, fontSize: 16),
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.4,
+              ),
             ),
           ],
         ),
@@ -332,10 +290,11 @@ class _PlateScanPageState extends State<PlateScanPage>
               const SizedBox(height: 8),
               Text(
                 plateText,
+                textAlign: TextAlign.left,
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
+                  fontSize: 26,
+                  fontWeight: FontWeight.w800,
                   letterSpacing: 1.2,
                 ),
               ),
@@ -358,7 +317,9 @@ class _PlateScanPageState extends State<PlateScanPage>
                         if (!existing.contains(plateText)) {
                           existing.add(plateText);
                           await box.put('data', existing);
-                          setState(() => _savedPlates.add(plateText));
+
+                          _savedPlates.add(plateText);
+                          setState(() {});
                         }
                         Navigator.pop(ctx);
                       },
@@ -385,6 +346,274 @@ class _PlateScanPageState extends State<PlateScanPage>
           ),
         );
       },
+    );
+  }
+}
+
+class _GradientBackground extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return const DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+    );
+  }
+}
+
+class _CameraLayer extends StatelessWidget {
+  final CameraController controller;
+  final PlateState state;
+  final bool showBox;
+  const _CameraLayer({
+    required this.controller,
+    required this.state,
+    required this.showBox,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final previewSize = controller.value.previewSize!;
+    return Stack(
+      children: [
+        Center(
+          child: FittedBox(
+            fit: BoxFit.cover,
+            child: SizedBox(
+              width: previewSize.height,
+              height: previewSize.width,
+              child: CameraPreview(controller),
+            ),
+          ),
+        ),
+
+        if (showBox && state.lastBox != null)
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            left: state.lastBox!.left,
+            top: state.lastBox!.top,
+            width: state.lastBox!.width,
+            height: state.lastBox!.height,
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: Colors.greenAccent.withOpacity(0.95),
+                    width: 3,
+                  ),
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.greenAccent.withOpacity(0.35),
+                      blurRadius: 16,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _IdleLayer extends StatelessWidget {
+  const _IdleLayer();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.camera_alt_outlined, color: Colors.white60, size: 50),
+          SizedBox(height: 6),
+          Text(
+            'Tekan start untuk memulai scanner',
+            style: TextStyle(color: Colors.white70, fontSize: 14),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FocusOverlay extends StatelessWidget {
+  const _FocusOverlay();
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Center(
+        child: Container(
+          width: MediaQuery.sizeOf(context).width * 0.78,
+          height: 120,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.28),
+              width: 1.6,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.tealAccent.withOpacity(0.18),
+                blurRadius: 18,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HudStatus extends StatelessWidget {
+  final bool scanning;
+  final bool isReady;
+  final String? message;
+  const _HudStatus({
+    required this.scanning,
+    required this.isReady,
+    this.message,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final text = !scanning
+        ? "Idle — tekan Start"
+        : (isReady ? (message ?? "Mendeteksi…") : "Menyiapkan kamera…");
+    final color = scanning ? Colors.lightGreenAccent : Colors.white70;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(14),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.08),
+            border: Border.all(color: Colors.white.withOpacity(0.12)),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                scanning
+                    ? Icons.speed_rounded
+                    : Icons.pause_circle_outline_rounded,
+                color: color,
+                size: 18,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  text,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GpuHint extends StatelessWidget {
+  const _GpuHint();
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: 0.9,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.07),
+              border: Border.all(color: Colors.white.withOpacity(0.12)),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.memory_rounded, color: Colors.tealAccent, size: 25),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    "Gunakan perangkat dengan GPU/NNAPI/Metal agar deteksi lebih cepat dan stabil.",
+                    style: TextStyle(color: Colors.white, fontSize: 12.5),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LastResultToast extends StatelessWidget {
+  final String text;
+  const _LastResultToast({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(14),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.45),
+            border: Border.all(color: Colors.white.withOpacity(0.12)),
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.greenAccent.withOpacity(0.25),
+                blurRadius: 14,
+                spreadRadius: 2,
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                "Hasil Scan Terakhir",
+                style: TextStyle(color: Colors.white70, fontSize: 13),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                text,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 18,
+                  letterSpacing: 1.05,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
