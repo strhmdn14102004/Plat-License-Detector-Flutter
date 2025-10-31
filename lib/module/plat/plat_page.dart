@@ -109,22 +109,28 @@ class _PlateScanPageState extends State<PlateScanPage>
         listener: (context, state) {
           if (state.lastText != null) {
             final text = state.lastText!.trim();
-            final lines = text.split('\n').map((e) => e.trim()).toList();
+            final lines = text
+                .split('\n')
+                .map((e) => e.trim().toUpperCase()) // ← tambahkan ini
+                .toList();
 
-            final plateRegex = RegExp(r'^[A-Z]{1,2}\s?\d{1,4}\s?[A-Z]{0,3}$');
+            final plateRegex = RegExp(
+              r'^[A-Z]{1,3}[\s\-]?\d{1,5}[\s\-]?[A-Z]{0,4}$',
+              caseSensitive: true,
+            );
+
             final timeRegex = RegExp(r'^\d{2}[:.,]?\d{2}$');
 
             String? plate;
             String? time;
             for (final l in lines) {
-              if (plate == null && plateRegex.hasMatch(l)) {
+              if (plate == null && plateRegex.hasMatch(l))
                 plate = l;
-              } else if (time == null && timeRegex.hasMatch(l))
+              else if (time == null && timeRegex.hasMatch(l))
                 time = l;
             }
-
-            if (plate != null && time != null) {
-              final cleanText = '$plate\n$time';
+            if (plate != null) {
+              final cleanText = (time != null) ? '$plate\n$time' : plate;
               if (!_savedPlates.contains(cleanText)) {
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   _showSaveBottomSheet(context, cleanText);
@@ -133,6 +139,34 @@ class _PlateScanPageState extends State<PlateScanPage>
             }
           }
         },
+        //jagaan harus ada tgl tahun nya
+        // listener: (context, state) {
+        //   if (state.lastText != null) {
+        //     final text = state.lastText!.trim();
+        //     final lines = text.split('\n').map((e) => e.trim()).toList();
+
+        //     final plateRegex = RegExp(r'^[A-Z]{1,2}\s?\d{1,4}\s?[A-Z]{0,3}$');
+        //     final timeRegex = RegExp(r'^\d{2}[:.,]?\d{2}$');
+
+        //     String? plate;
+        //     String? time;
+        //     for (final l in lines) {
+        //       if (plate == null && plateRegex.hasMatch(l)) {
+        //         plate = l;
+        //       } else if (time == null && timeRegex.hasMatch(l))
+        //         time = l;
+        //     }
+
+        //     if (plate != null && time != null) {
+        //       final cleanText = '$plate\n$time';
+        //       if (!_savedPlates.contains(cleanText)) {
+        //         WidgetsBinding.instance.addPostFrameCallback((_) {
+        //           _showSaveBottomSheet(context, cleanText);
+        //         });
+        //       }
+        //     }
+        //   }
+        // },
         builder: (context, state) {
           final controller = state.controller;
           return Scaffold(
