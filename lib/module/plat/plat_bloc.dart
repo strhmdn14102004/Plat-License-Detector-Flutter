@@ -1,4 +1,3 @@
-// ignore_for_file: depend_on_referenced_packages
 import 'dart:async';
 import 'dart:io';
 
@@ -136,6 +135,7 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
         yoloBox: rawBox,
         controller: ev.controller,
         inputSize: yoloService.inputSize,
+        imageRotation: ev.cameraImage.format.raw ?? 0,
       );
 
       _smoothBox = _applySmoothing(mappedBox, _smoothBox);
@@ -152,12 +152,16 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
         ),
       );
 
-      // OCR tiap 700ms iOS / 1600ms Android
       if (now.difference(_lastOcr).inMilliseconds >=
           (Platform.isIOS ? 700 : 1600)) {
         _lastOcr = now;
         Future.microtask(() async {
-          final text = await _runOcrDirect(jpeg, rawBox, yoloService.inputSize);
+          final text = await _runOcrDirect(
+            jpeg,
+            rawBox,
+            yoloService.inputSize,
+            ev.controller,
+          );
           if (text != null && text.isNotEmpty) {
             final list = List<String>.from(state.detectedPlates);
             if (!list.contains(text)) list.add(text);
@@ -183,25 +187,15 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
     }
   }
 
-  Rect _applySmoothing(Rect newBox, Rect? prevBox, {double alpha = 0.25}) {
-    if (prevBox == null) return newBox;
-    double lerp(double a, double b) => a + (b - a) * alpha;
-    return Rect.fromLTWH(
-      lerp(prevBox.left, newBox.left),
-      lerp(prevBox.top, newBox.top),
-      lerp(prevBox.width, newBox.width),
-      lerp(prevBox.height, newBox.height),
-    );
-  }
-
   Rect _translateBox({
     required Rect yoloBox,
     required CameraController controller,
     required int inputSize,
+    int imageRotation = 0,
   }) {
-    final size = controller.value.previewSize!;
-    final scaleX = size.width / inputSize;
-    final scaleY = size.height / inputSize;
+    final previewSize = controller.value.previewSize!;
+    final scaleX = previewSize.width / inputSize;
+    final scaleY = previewSize.height / inputSize;
 
     double left = yoloBox.left * scaleX;
     double top = yoloBox.top * scaleY;
@@ -209,20 +203,36 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
     double height = yoloBox.height * scaleY;
 
     if (Platform.isIOS) {
-      final rotatedLeft = size.width - (top + height);
-      final rotatedTop = left;
-      final rotatedW = height;
-      final rotatedH = width;
-      return Rect.fromLTWH(rotatedLeft, rotatedTop, rotatedW, rotatedH);
+      if (previewSize.height > previewSize.width) {
+        final rotatedLeft = top;
+        final rotatedTop = previewSize.height - (left + width);
+        final rotatedW = height;
+        final rotatedH = width;
+        return Rect.fromLTWH(rotatedLeft, rotatedTop, rotatedW, rotatedH);
+      } else {
+        final rotatedLeft = previewSize.width - (top + height);
+        final rotatedTop = left;
+        final rotatedW = height;
+        final rotatedH = width;
+        return Rect.fromLTWH(rotatedLeft, rotatedTop, rotatedW, rotatedH);
+      }
     }
     return Rect.fromLTWH(left, top, width, height);
   }
 
-  Future<String?> _runOcrDirect(Uint8List jpeg, Rect box, int inputSize) async {
+  Future<String?> _runOcrDirect(
+    Uint8List jpeg,
+    Rect box,
+    int inputSize,
+    CameraController controller,
+  ) async {
     try {
       var img = imglib.decodeImage(jpeg);
       if (img == null) return null;
-      if (Platform.isIOS && img.height > img.width) {
+
+      final preview = controller.value.previewSize!;
+
+      if (Platform.isIOS && preview.height > preview.width) {
         img = imglib.copyRotate(img, angle: 90);
       }
 
@@ -239,8 +249,6 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
       final file = File(
         p.join(tmp.path, 'ocr_${DateTime.now().millisecondsSinceEpoch}.jpg'),
       )..writeAsBytesSync(imglib.encodeJpg(cropped, quality: 90), flush: true);
-
-      await Future.delayed(const Duration(milliseconds: 40));
 
       final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
       final input = InputImage.fromFile(file);
@@ -260,6 +268,17 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
       debugPrint('OCR error: $e\n$st');
       return null;
     }
+  }
+
+  Rect _applySmoothing(Rect newBox, Rect? prevBox, {double alpha = 0.25}) {
+    if (prevBox == null) return newBox;
+    double lerp(double a, double b) => a + (b - a) * alpha;
+    return Rect.fromLTWH(
+      lerp(prevBox.left, newBox.left),
+      lerp(prevBox.top, newBox.top),
+      lerp(prevBox.width, newBox.width),
+      lerp(prevBox.height, newBox.height),
+    );
   }
 
   Future<Uint8List?> _convertCameraImageToJpeg(CameraImage image) async {

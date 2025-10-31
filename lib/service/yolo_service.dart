@@ -55,7 +55,6 @@ class YoloService {
   }
 
   Future<List<YoloResult>> detectFromImageBytes(Uint8List jpegBytes) async {
-    // jalankan CPU isolate (cepat dan stabil)
     return compute(_detectOnIsolate, {
       'jpegBytes': jpegBytes,
       'inputSize': inputSize,
@@ -65,7 +64,6 @@ class YoloService {
   }
 }
 
-// isolate worker: CPU (XNNPack)
 Future<List<YoloResult>> _detectOnIsolate(Map<String, dynamic> args) async {
   final jpegBytes = args['jpegBytes'] as Uint8List;
   final modelBytes = args['modelBytes'] as Uint8List;
@@ -73,15 +71,15 @@ Future<List<YoloResult>> _detectOnIsolate(Map<String, dynamic> args) async {
   final scoreThreshold = args['scoreThreshold'] as double;
 
   final options = InterpreterOptions();
-  options.addDelegate(XNNPackDelegate()); // cepat dan aman iOS/Android
+  options.addDelegate(XNNPackDelegate());
 
   final interpreter = Interpreter.fromBuffer(modelBytes, options: options);
   final img = imglib.decodeImage(jpegBytes);
   if (img == null) return [];
 
   final resized = imglib.copyResize(img, width: inputSize, height: inputSize);
-
   final input = List<double>.filled(inputSize * inputSize * 3, 0.0);
+
   int index = 0;
   for (int y = 0; y < inputSize; y++) {
     for (int x = 0; x < inputSize; x++) {
@@ -125,6 +123,5 @@ Future<List<YoloResult>> _detectOnIsolate(Map<String, dynamic> args) async {
       ),
     );
   }
-
   return results;
 }
