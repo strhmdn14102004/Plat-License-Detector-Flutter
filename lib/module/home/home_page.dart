@@ -3,6 +3,7 @@
 import 'dart:io';
 import 'dart:ui';
 
+import 'package:face_recognition/module/home/plate_capture_page.dart';
 import 'package:face_recognition/module/home/view_data_page.dart';
 import 'package:face_recognition/module/plat/plat_page.dart';
 import 'package:flutter/material.dart';
@@ -107,6 +108,20 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   const SizedBox(height: 30),
 
                   const _ShimmerButton(),
+                  const SizedBox(height: 18),
+                  _MainButton(
+                    title: "Mode Capture",
+                    subtitle: "Deteksi plat dari hasil foto (non-realtime)",
+                    icon: Icons.camera_enhance_rounded,
+                    color1: const Color(0xFFF59E0B),
+                    color2: const Color(0xFFFBBF24),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const PlateCapturePage(),
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 18),
 
                   _MainButton(

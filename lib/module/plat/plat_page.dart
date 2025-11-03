@@ -67,7 +67,7 @@ class _PlateScanPageState extends State<PlateScanPage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _bloc.add(StopCamera());
+    _stopScan(); // pastikan stop saat dispose
     super.dispose();
   }
 
@@ -107,7 +107,8 @@ class _PlateScanPageState extends State<PlateScanPage>
       },
       child: BlocConsumer<PlateBloc, PlateState>(
         listener: (context, state) {
-          if (state.lastText != null) {
+          if (state.lastText != null && !state.isFromCapture) {
+            // hanya realtime
             final text = state.lastText!.trim();
             final lines = text
                 .split('\n')
@@ -118,106 +119,106 @@ class _PlateScanPageState extends State<PlateScanPage>
               r'^[A-Z]{1,3}[\s\-]?\d{1,5}[\s\-]?[A-Z]{0,4}$',
               caseSensitive: true,
             );
-
             final timeRegex = RegExp(r'^\d{2}[:.,]?\d{2}$');
 
             String? plate;
             String? time;
             for (final l in lines) {
-              if (plate == null && plateRegex.hasMatch(l)) {
+              if (plate == null && plateRegex.hasMatch(l))
                 plate = l;
-              } else if (time == null && timeRegex.hasMatch(l))
+              else if (time == null && timeRegex.hasMatch(l))
                 time = l;
             }
             if (plate != null) {
               final cleanText = (time != null) ? '$plate\n$time' : plate;
               if (!_savedPlates.contains(cleanText)) {
+                // reset dulu supaya tidak trigger ulang
+                _bloc.add(ClearLastResult());
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   _showSaveBottomSheet(context, cleanText);
                 });
+              } else {
+                _bloc.add(ClearLastResult());
               }
+            } else {
+              _bloc.add(ClearLastResult());
             }
           }
         },
-
         builder: (context, state) {
           final controller = state.controller;
-          return Scaffold(
-            backgroundColor: const Color(0xFF0B1220),
-            extendBodyBehindAppBar: true,
-            appBar: AppBar(
-              title: const Text("License Plate Scanner"),
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              centerTitle: true,
-              leading: IconButton(
-                icon: const Icon(Icons.turn_left_rounded),
-                onPressed: () {
-                  _stopScan();
-                  Navigator.of(context).maybePop();
-                },
+          return SafeArea(
+            child: Scaffold(
+              backgroundColor: const Color(0xFF0B1220),
+              extendBodyBehindAppBar: true,
+              appBar: AppBar(
+                title: const Text("License Plate Scanner"),
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                centerTitle: true,
+                leading: IconButton(
+                  icon: const Icon(Icons.turn_left_rounded),
+                  onPressed: () {
+                    _stopScan();
+                    Navigator.of(context).maybePop();
+                  },
+                ),
               ),
-            ),
-            body: !_initialized
-                ? const Center(child: CircularProgressIndicator())
-                : Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      _GradientBackground(),
-
-                      if (_scanning &&
-                          state.isCameraReady &&
-                          controller != null &&
-                          controller.value.isInitialized)
-                        _CameraLayer(
-                          controller: controller,
-                          state: state,
-                          showBox: kShowDebugBox,
-                        )
-                      else
-                        const _IdleLayer(),
-
-                      const _FocusOverlay(),
-
-                      Positioned(
-                        top: kToolbarHeight + 40,
-                        left: 20,
-                        right: 20,
-                        child: _HudStatus(
-                          scanning: _scanning,
-                          isReady: state.isCameraReady,
-                          message: state.message,
-                        ),
-                      ),
-
-                      const Positioned(
-                        bottom: 120,
-                        left: 16,
-                        right: 16,
-                        child: _GpuHint(),
-                      ),
-
-                      Positioned(
-                        bottom: 40,
-                        left: 0,
-                        right: 0,
-                        child: Center(
-                          child: _toggleButton(
+              body: !_initialized
+                  ? const Center(child: CircularProgressIndicator())
+                  : Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        _GradientBackground(),
+                        if (_scanning &&
+                            state.isCameraReady &&
+                            controller != null &&
+                            controller.value.isInitialized)
+                          _CameraLayer(
+                            controller: controller,
+                            state: state,
+                            showBox: kShowDebugBox,
+                          )
+                        else
+                          const _IdleLayer(),
+                        const _FocusOverlay(),
+                        Positioned(
+                          top: kToolbarHeight + 40,
+                          left: 20,
+                          right: 20,
+                          child: _HudStatus(
                             scanning: _scanning,
-                            onTap: _toggleScan,
+                            isReady: state.isCameraReady,
+                            message: state.message,
                           ),
                         ),
-                      ),
-
-                      if (_savedPlates.isNotEmpty)
-                        Positioned(
-                          bottom: 190,
+                        const Positioned(
+                          bottom: 120,
                           left: 16,
                           right: 16,
-                          child: _LastResultToast(text: _savedPlates.last),
+                          child: _GpuHint(),
                         ),
-                    ],
-                  ),
+                        Positioned(
+                          bottom: 40,
+                          left: 0,
+                          right: 0,
+                          child: Center(
+                            child: _toggleButton(
+                              scanning: _scanning,
+                              onTap: _toggleScan,
+                            ),
+                          ),
+                        ),
+                        if (_savedPlates.isNotEmpty)
+                          Positioned(
+                            bottom: 190,
+                            left: 16,
+                            right: 16,
+                            child: _LastResultToast(text: _savedPlates.last),
+                          ),
+                      ],
+                    ),
+            ),
           );
         },
       ),
@@ -328,7 +329,6 @@ class _PlateScanPageState extends State<PlateScanPage>
                         if (!existing.contains(plateText)) {
                           existing.add(plateText);
                           await box.put('data', existing);
-
                           _savedPlates.add(plateText);
                           setState(() {});
                         }
@@ -401,7 +401,6 @@ class _CameraLayer extends StatelessWidget {
             ),
           ),
         ),
-
         if (showBox && state.lastBox != null)
           AnimatedPositioned(
             duration: const Duration(milliseconds: 220),
@@ -436,7 +435,6 @@ class _CameraLayer extends StatelessWidget {
 
 class _IdleLayer extends StatelessWidget {
   const _IdleLayer();
-
   @override
   Widget build(BuildContext context) {
     return const Center(
@@ -457,7 +455,6 @@ class _IdleLayer extends StatelessWidget {
 
 class _FocusOverlay extends StatelessWidget {
   const _FocusOverlay();
-
   @override
   Widget build(BuildContext context) {
     return IgnorePointer(
@@ -513,7 +510,6 @@ class _HudStatus extends StatelessWidget {
     if (match != null) {
       fps = double.tryParse(match.group(1)!);
     }
-
     final fpsColor = fps != null ? _fpsColor(fps) : Colors.white70;
 
     return ClipRRect(
@@ -575,7 +571,6 @@ class _HudStatus extends StatelessWidget {
 
 class _GpuHint extends StatelessWidget {
   const _GpuHint();
-
   @override
   Widget build(BuildContext context) {
     return Opacity(
@@ -614,7 +609,6 @@ class _GpuHint extends StatelessWidget {
 class _LastResultToast extends StatelessWidget {
   final String text;
   const _LastResultToast({required this.text});
-
   @override
   Widget build(BuildContext context) {
     return ClipRRect(

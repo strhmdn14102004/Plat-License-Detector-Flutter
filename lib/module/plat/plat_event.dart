@@ -15,4 +15,9 @@ class ProcessCameraImage extends PlateEvent {
   ProcessCameraImage(this.cameraImage, this.controller);
 }
 
-class ManualScanTrigger extends PlateEvent {}
+class CaptureAndProcess extends PlateEvent {
+  final CameraDescription camera;
+  CaptureAndProcess(this.camera);
+}
+
+class ClearLastResult extends PlateEvent {}

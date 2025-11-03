@@ -10,6 +10,9 @@ class PlateState {
   final String? lastText;
   final List<String> detectedPlates;
   final String? message;
+
+  final bool isFromCapture;
+
   PlateState({
     required this.isCameraReady,
     required this.controller,
@@ -18,5 +21,6 @@ class PlateState {
     required this.lastText,
     required this.detectedPlates,
     required this.message,
+    required this.isFromCapture,
   });
 }
