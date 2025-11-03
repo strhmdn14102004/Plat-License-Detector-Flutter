@@ -18,8 +18,13 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
   final OcrIsolatePool ocrPool;
 
   bool _busy = false;
+  bool _streamActive = false;
   DateTime _lastProcessed = DateTime.fromMillisecondsSinceEpoch(0);
+  DateTime _lastOcr = DateTime.fromMillisecondsSinceEpoch(0);
   Rect? _smoothBox;
+
+  final int _yoloIntervalMs = 140;
+  final int _ocrIntervalMs = 400;
 
   PlateBloc({required this.yoloPool, required this.ocrPool})
     : super(
@@ -66,9 +71,15 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
 
     try {
       await controller.initialize();
+      if (_streamActive) return;
+      _streamActive = true;
+
       controller.startImageStream((image) {
+        if (!_streamActive) return;
+
         add(ProcessCameraImage(image, controller));
       });
+
       ocrPool.start();
       emit(
         PlateState(
@@ -88,6 +99,7 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
 
   Future<void> _onStopCamera(StopCamera ev, Emitter<PlateState> emit) async {
     try {
+      _streamActive = false;
       final ctrl = state.controller;
       if (ctrl != null && ctrl.value.isStreamingImages) {
         await ctrl.stopImageStream();
@@ -111,20 +123,21 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
     ProcessCameraImage ev,
     Emitter<PlateState> emit,
   ) async {
+    if (_busy) return;
     final now = DateTime.now();
-    if (!state.isCameraReady || _busy) return;
-    if (now.difference(_lastProcessed).inMilliseconds < 150) return;
+    if (now.difference(_lastProcessed).inMilliseconds < _yoloIntervalMs) return;
 
     _busy = true;
     _lastProcessed = now;
+
     try {
-      final jpeg = await _convertCameraImageToJpeg(ev.cameraImage);
-      if (jpeg == null) {
+      final rgbBytes = await _convertToRgbBytes(ev.cameraImage);
+      if (rgbBytes == null) {
         _busy = false;
         return;
       }
 
-      final results = await yoloPool.detect(jpeg);
+      final results = await yoloPool.detect(rgbBytes);
       if (results.isEmpty) {
         _busy = false;
         return;
@@ -158,8 +171,11 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
         ),
       );
 
-      final cropped = await _cropPlateRegion(jpeg, rect, 640);
-      if (cropped != null) ocrPool.push(cropped);
+      if (now.difference(_lastOcr).inMilliseconds > _ocrIntervalMs) {
+        _lastOcr = now;
+        final cropped = await _cropRegion(rgbBytes, rect, 640);
+        if (cropped != null) ocrPool.push(cropped);
+      }
     } catch (e, st) {
       debugPrint("Error process: $e\n$st");
     } finally {
@@ -167,13 +183,33 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
     }
   }
 
-  Future<Uint8List?> _cropPlateRegion(
+  Future<Uint8List?> _convertToRgbBytes(CameraImage image) async {
+    try {
+      if (Platform.isIOS && image.format.group == ImageFormatGroup.bgra8888) {
+        final plane = image.planes.first;
+        final img = imglib.Image.fromBytes(
+          width: image.width,
+          height: image.height,
+          bytes: plane.bytes.buffer,
+          order: imglib.ChannelOrder.bgra,
+        );
+        return Uint8List.fromList(imglib.encodeJpg(img, quality: 65));
+      } else {
+        final img = _convertYUV420toImageColor(image);
+        return Uint8List.fromList(imglib.encodeJpg(img, quality: 65));
+      }
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Uint8List?> _cropRegion(
     Uint8List jpeg,
     Rect rect,
     int inputSize,
   ) async {
     try {
-      var img = imglib.decodeImage(jpeg);
+      final img = imglib.decodeImage(jpeg);
       if (img == null) return null;
 
       final sx = img.width / inputSize;
@@ -184,40 +220,9 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
       int h = (rect.height * sy).round().clamp(1, img.height - y1);
 
       final cropped = imglib.copyCrop(img, x: x1, y: y1, width: w, height: h);
-      return Uint8List.fromList(imglib.encodeJpg(cropped, quality: 95));
+      return Uint8List.fromList(imglib.encodeJpg(cropped, quality: 90));
     } catch (e) {
       debugPrint("Crop error: $e");
-      return null;
-    }
-  }
-
-  Rect _applySmoothing(Rect newBox, Rect? prevBox, {double alpha = 0.25}) {
-    if (prevBox == null) return newBox;
-    double lerp(double a, double b) => a + (b - a) * alpha;
-    return Rect.fromLTWH(
-      lerp(prevBox.left, newBox.left),
-      lerp(prevBox.top, newBox.top),
-      lerp(prevBox.width, newBox.width),
-      lerp(prevBox.height, newBox.height),
-    );
-  }
-
-  Future<Uint8List?> _convertCameraImageToJpeg(CameraImage image) async {
-    try {
-      if (Platform.isIOS && image.format.group == ImageFormatGroup.bgra8888) {
-        final plane = image.planes.first;
-        final img = imglib.Image.fromBytes(
-          width: image.width,
-          height: image.height,
-          bytes: plane.bytes.buffer,
-          order: imglib.ChannelOrder.bgra,
-        );
-        return Uint8List.fromList(imglib.encodeJpg(img, quality: 70));
-      } else {
-        final img = _convertYUV420toImageColor(image);
-        return Uint8List.fromList(imglib.encodeJpg(img, quality: 70));
-      }
-    } catch (_) {
       return null;
     }
   }
@@ -249,8 +254,20 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
     return imglib.copyRotate(img, angle: 90);
   }
 
+  Rect _applySmoothing(Rect newBox, Rect? prevBox, {double alpha = 0.25}) {
+    if (prevBox == null) return newBox;
+    double lerp(double a, double b) => a + (b - a) * alpha;
+    return Rect.fromLTWH(
+      lerp(prevBox.left, newBox.left),
+      lerp(prevBox.top, newBox.top),
+      lerp(prevBox.width, newBox.width),
+      lerp(prevBox.height, newBox.height),
+    );
+  }
+
   @override
   Future<void> close() async {
+    _streamActive = false;
     await state.controller?.dispose();
     yoloPool.dispose();
     ocrPool.dispose();

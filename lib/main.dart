@@ -11,7 +11,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
   await Hive.openBox('plates');
-
+  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   final modelBytes = await rootBundle.load(
     'assets/models/license_plate_detector_float16.tflite',
   );
