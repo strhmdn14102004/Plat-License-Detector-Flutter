@@ -6,6 +6,7 @@ import 'dart:typed_data';
 
 import 'package:bloc/bloc.dart';
 import 'package:camera/camera.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:face_recognition/module/plat/plat_event.dart';
 import 'package:face_recognition/module/plat/plat_state.dart';
 import 'package:face_recognition/service/ocr_isolate_pool.dart';
@@ -22,6 +23,10 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
   DateTime _lastProcessed = DateTime.fromMillisecondsSinceEpoch(0);
   DateTime _lastOcr = DateTime.fromMillisecondsSinceEpoch(0);
   Rect? _smoothBox;
+
+  double _fps = 0;
+  DateTime _lastFrame = DateTime.now();
+  String _activeResolution = "high";
 
   final int _yoloIntervalMs = 140;
   final int _ocrIntervalMs = 400;
@@ -53,16 +58,49 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
           lastBox: _smoothBox,
           lastText: text,
           detectedPlates: list,
-          message: 'Plat terbaca:\n$text',
+          message:
+              '📸 ${_activeResolution.toUpperCase()} — '
+              '${_fps.toStringAsFixed(1)} FPS\nPlat terbaca:\n$text',
         ),
       );
     });
   }
 
   Future<void> _onStartCamera(StartCamera ev, Emitter<PlateState> emit) async {
+    final deviceInfo = DeviceInfoPlugin();
+    ResolutionPreset resolution = ResolutionPreset.high;
+    _activeResolution = "high";
+
+    try {
+      if (Platform.isAndroid) {
+        final info = await deviceInfo.androidInfo;
+        final sdk = info.version.sdkInt;
+        if (sdk <= 30) {
+          resolution = ResolutionPreset.medium;
+          _activeResolution = "medium";
+        }
+        debugPrint("📱 Android SDK: $sdk → Resolution: ${resolution.name}");
+      } else if (Platform.isIOS) {
+        final info = await deviceInfo.iosInfo;
+        final model = info.utsname.machine.toLowerCase();
+        if (model.contains('iphone13,') || model.contains('iphone13')) {
+          resolution = ResolutionPreset.medium;
+          _activeResolution = "medium";
+        } else {
+          resolution = ResolutionPreset.high;
+          _activeResolution = "high";
+        }
+        debugPrint(
+          "📱 iPhone model: ${info.utsname.machine} → Resolution: ${resolution.name}",
+        );
+      }
+    } catch (e) {
+      debugPrint("⚠️ DeviceInfo error: $e → fallback to high");
+    }
+
     final controller = CameraController(
       ev.camera,
-      ResolutionPreset.high,
+      resolution,
       enableAudio: false,
       imageFormatGroup: Platform.isIOS
           ? ImageFormatGroup.bgra8888
@@ -76,7 +114,6 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
 
       controller.startImageStream((image) {
         if (!_streamActive) return;
-
         add(ProcessCameraImage(image, controller));
       });
 
@@ -89,7 +126,7 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
           lastBox: null,
           lastText: null,
           detectedPlates: [],
-          message: 'Kamera aktif',
+          message: 'Kamera aktif (${_activeResolution.toUpperCase()})',
         ),
       );
     } catch (e) {
@@ -123,8 +160,12 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
     ProcessCameraImage ev,
     Emitter<PlateState> emit,
   ) async {
-    if (_busy) return;
     final now = DateTime.now();
+    final frameDiff = now.difference(_lastFrame).inMilliseconds;
+    if (frameDiff > 0) _fps = 1000 / frameDiff;
+    _lastFrame = now;
+
+    if (_busy) return;
     if (now.difference(_lastProcessed).inMilliseconds < _yoloIntervalMs) return;
 
     _busy = true;
@@ -167,7 +208,9 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
           lastBox: _smoothBox,
           lastText: state.lastText,
           detectedPlates: state.detectedPlates,
-          message: 'Plat ${(top.score * 100).toStringAsFixed(1)}%',
+          message:
+              '📸 ${_activeResolution.toUpperCase()} — ${_fps.toStringAsFixed(1)} FPS — '
+              'Plat ${(top.score * 100).toStringAsFixed(1)}%',
         ),
       );
 

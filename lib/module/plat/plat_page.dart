@@ -111,7 +111,7 @@ class _PlateScanPageState extends State<PlateScanPage>
             final text = state.lastText!.trim();
             final lines = text
                 .split('\n')
-                .map((e) => e.trim().toUpperCase()) // ← tambahkan ini
+                .map((e) => e.trim().toUpperCase())
                 .toList();
 
             final plateRegex = RegExp(
@@ -124,9 +124,9 @@ class _PlateScanPageState extends State<PlateScanPage>
             String? plate;
             String? time;
             for (final l in lines) {
-              if (plate == null && plateRegex.hasMatch(l))
+              if (plate == null && plateRegex.hasMatch(l)) {
                 plate = l;
-              else if (time == null && timeRegex.hasMatch(l))
+              } else if (time == null && timeRegex.hasMatch(l))
                 time = l;
             }
             if (plate != null) {
@@ -139,34 +139,7 @@ class _PlateScanPageState extends State<PlateScanPage>
             }
           }
         },
-        //jagaan harus ada tgl tahun nya
-        // listener: (context, state) {
-        //   if (state.lastText != null) {
-        //     final text = state.lastText!.trim();
-        //     final lines = text.split('\n').map((e) => e.trim()).toList();
 
-        //     final plateRegex = RegExp(r'^[A-Z]{1,2}\s?\d{1,4}\s?[A-Z]{0,3}$');
-        //     final timeRegex = RegExp(r'^\d{2}[:.,]?\d{2}$');
-
-        //     String? plate;
-        //     String? time;
-        //     for (final l in lines) {
-        //       if (plate == null && plateRegex.hasMatch(l)) {
-        //         plate = l;
-        //       } else if (time == null && timeRegex.hasMatch(l))
-        //         time = l;
-        //     }
-
-        //     if (plate != null && time != null) {
-        //       final cleanText = '$plate\n$time';
-        //       if (!_savedPlates.contains(cleanText)) {
-        //         WidgetsBinding.instance.addPostFrameCallback((_) {
-        //           _showSaveBottomSheet(context, cleanText);
-        //         });
-        //       }
-        //     }
-        //   }
-        // },
         builder: (context, state) {
           final controller = state.controller;
           return Scaffold(
@@ -522,12 +495,26 @@ class _HudStatus extends StatelessWidget {
     this.message,
   });
 
+  Color _fpsColor(double fps) {
+    if (fps >= 25) return Colors.greenAccent;
+    if (fps >= 15) return Colors.orangeAccent;
+    return Colors.redAccent;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final text = !scanning
+    String text = !scanning
         ? "Idle — tekan Start"
         : (isReady ? (message ?? "Mendeteksi…") : "Menyiapkan kamera…");
     final color = scanning ? Colors.lightGreenAccent : Colors.white70;
+
+    double? fps;
+    final match = RegExp(r'(\d+\.\d+)\s*FPS').firstMatch(text);
+    if (match != null) {
+      fps = double.tryParse(match.group(1)!);
+    }
+
+    final fpsColor = fps != null ? _fpsColor(fps) : Colors.white70;
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(14),
@@ -541,6 +528,7 @@ class _HudStatus extends StatelessWidget {
             borderRadius: BorderRadius.circular(14),
           ),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Icon(
                 scanning
@@ -557,9 +545,26 @@ class _HudStatus extends StatelessWidget {
                     color: Colors.white,
                     fontSize: 13.5,
                     fontWeight: FontWeight.w600,
+                    height: 1.4,
                   ),
                 ),
               ),
+              if (fps != null)
+                Row(
+                  children: [
+                    const SizedBox(width: 8),
+                    Icon(Icons.circle, color: fpsColor, size: 10),
+                    const SizedBox(width: 4),
+                    Text(
+                      "${fps.toStringAsFixed(1)} FPS",
+                      style: TextStyle(
+                        color: fpsColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                  ],
+                ),
             ],
           ),
         ),
