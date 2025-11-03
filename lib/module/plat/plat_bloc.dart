@@ -62,7 +62,7 @@ class PlateBloc extends Bloc<PlateEvent, PlateState> {
   Future<void> _onStartCamera(StartCamera ev, Emitter<PlateState> emit) async {
     final controller = CameraController(
       ev.camera,
-      ResolutionPreset.medium,
+      ResolutionPreset.high,
       enableAudio: false,
       imageFormatGroup: Platform.isIOS
           ? ImageFormatGroup.bgra8888
