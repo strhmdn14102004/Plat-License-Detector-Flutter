@@ -1,3 +1,5 @@
+// ignore_for_file: body_might_complete_normally_catch_error
+
 import 'dart:async';
 import 'dart:io';
 
@@ -10,6 +12,7 @@ import 'package:path_provider/path_provider.dart';
 class OcrIsolatePool {
   final _queue = StreamController<Uint8List>();
   bool _running = false;
+  DateTime _lastProcessed = DateTime.fromMillisecondsSinceEpoch(0);
 
   final _onResult = StreamController<String>.broadcast();
   Stream<String> get results => _onResult.stream;
@@ -26,12 +29,22 @@ class OcrIsolatePool {
 
   Future<String?> _process(Uint8List jpeg) async {
     try {
-      final img = imglib.decodeImage(jpeg);
+      final now = DateTime.now();
+      final diff = now.difference(_lastProcessed).inMilliseconds;
+      final isRealtime = diff < 300;
+      _lastProcessed = now;
+
+      var img = imglib.decodeImage(jpeg);
       if (img == null) return null;
+
+      if (isRealtime) {
+        img = imglib.adjustColor(img, brightness: 0.05, contrast: 1.15);
+        img = imglib.gaussianBlur(img, radius: 1);
+      }
 
       final tmp = await getTemporaryDirectory();
       final file = File(
-        p.join(tmp.path, 'ocr_${DateTime.now().millisecondsSinceEpoch}.jpg'),
+        p.join(tmp.path, 'ocr_${now.millisecondsSinceEpoch}.jpg'),
       )..writeAsBytesSync(imglib.encodeJpg(img, quality: 90), flush: true);
 
       final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
@@ -86,10 +99,10 @@ class OcrIsolatePool {
             .replaceAll('G', '6');
 
         mid = mid.replaceAllMapped(RegExp(r'8'), (m) {
-          final idx = m.start;
-          if (idx > 0 && idx < mid.length - 1) {
-            final before = mid[idx - 1];
-            final after = mid[idx + 1];
+          final i = m.start;
+          if (i > 0 && i < mid.length - 1) {
+            final before = mid[i - 1];
+            final after = mid[i + 1];
             if ('906'.contains(before) || '906'.contains(after)) return '8';
           }
           return '3';
@@ -174,7 +187,6 @@ class OcrIsolatePool {
       final plateRegex = RegExp(r'^[A-Z]{1,3}[\s\-]?\d{1,5}[\s\-]?[A-Z]{0,4}$');
 
       String? plate;
-
       for (final raw in lines) {
         final txt = normalize(raw);
         if (plate == null && plateRegex.hasMatch(txt)) {
@@ -185,12 +197,16 @@ class OcrIsolatePool {
 
       if (plate != null) {
         final formatted = plate.replaceAll(RegExp(r'\s+'), ' ').trim();
-        debugPrint("🧠 OCR fix output: $formatted");
+        debugPrint(
+          isRealtime
+              ? "📸 [Realtime OCR] $formatted"
+              : "🖼️ [Gallery OCR] $formatted",
+        );
         return formatted;
       }
 
       final fb = normalize(lines.join(' '));
-      debugPrint("🧠 OCR fallback output: $fb");
+      debugPrint("🧠 OCR fallback: $fb");
       return fb;
     } catch (e, st) {
       debugPrint("❌ OCR error: $e\n$st");

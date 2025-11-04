@@ -45,6 +45,7 @@ class PlateCaptureBloc extends Bloc<PlateCaptureEvent, PlateCaptureState> {
     Emitter<PlateCaptureState> emit,
   ) async {
     final info = DeviceInfoPlugin();
+    final deviceInfo = DeviceInfoPlugin();
     ResolutionPreset resolution = ResolutionPreset.high;
     activeResolution = "high";
 
@@ -56,7 +57,19 @@ class PlateCaptureBloc extends Bloc<PlateCaptureEvent, PlateCaptureState> {
             ? ResolutionPreset.medium
             : ResolutionPreset.high;
       } else if (Platform.isIOS) {
-        resolution = ResolutionPreset.high;
+        final info = await deviceInfo.iosInfo;
+        final model = info.utsname.machine.toLowerCase();
+
+        if (model.contains('iphone13,')) {
+          resolution = ResolutionPreset.medium;
+          activeResolution = "medium";
+        } else {
+          resolution = ResolutionPreset.high;
+          activeResolution = "high";
+        }
+        debugPrint(
+          "📱 iPhone model: ${info.utsname.machine} → Resolution: ${resolution.name}",
+        );
       }
     } catch (_) {}
 
