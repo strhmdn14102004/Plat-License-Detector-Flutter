@@ -1,4 +1,4 @@
-// ignore_for_file: deprecated_member_use, use_build_context_synchronously
+// ignore_for_file: use_build_context_synchronously, deprecated_member_use
 
 import 'dart:ui';
 
@@ -52,6 +52,7 @@ class _PlateScanCapturePageState extends State<PlateScanCapturePage>
     setState(() => _flash = true);
     await Future.delayed(const Duration(milliseconds: 120));
     setState(() => _flash = false);
+    await Future.delayed(const Duration(milliseconds: 350));
     _bloc.add(CaptureAndProcessFrame(_camera!));
   }
 
@@ -265,9 +266,8 @@ class _CameraLayer extends StatelessWidget {
   final CameraController controller;
   const _CameraLayer({required this.controller});
   @override
-  Widget build(BuildContext context) => Center(
-    child: CameraPreview(controller),
-  );
+  Widget build(BuildContext context) =>
+      Center(child: CameraPreview(controller));
 }
 
 class _IdleLayer extends StatelessWidget {

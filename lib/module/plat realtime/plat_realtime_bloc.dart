@@ -25,7 +25,7 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
   DateTime _lastProcessed = DateTime.fromMillisecondsSinceEpoch(0);
   DateTime _lastOcr = DateTime.fromMillisecondsSinceEpoch(0);
   Rect? _smoothBox;
-
+  String activeResolution = "veryHigh";
   final int _intervalYolo = 150;
   final int _intervalOcr = 400;
 
@@ -69,37 +69,42 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
     StartRealtimeCamera ev,
     Emitter<PlateRealtimeState> emit,
   ) async {
-    final info = DeviceInfoPlugin();
-    ResolutionPreset preset = ResolutionPreset.high;
-
+    final deviceInfo = DeviceInfoPlugin();
+    ResolutionPreset resolution = ResolutionPreset.veryHigh;
+    activeResolution = "veryHigh";
     try {
       if (Platform.isAndroid) {
-        final android = await info.androidInfo;
+        final android = await deviceInfo.androidInfo;
         final sdk = android.version.sdkInt;
         if (sdk <= 30) {
-          preset = ResolutionPreset.medium;
+          resolution = ResolutionPreset.medium;
         } else {
-          preset = ResolutionPreset.veryHigh;
+          resolution = ResolutionPreset.veryHigh;
         }
       } else if (Platform.isIOS) {
-        final ios = await info.iosInfo;
-        final versionString = ios.systemVersion;
-        final version = double.tryParse(versionString.split('.').first) ?? 0.0;
-        if (version < 15) {
-          preset = ResolutionPreset.medium;
+        final info = await deviceInfo.iosInfo;
+        final model = info.utsname.machine.toLowerCase();
+
+        if (model.contains('iphone13,')) {
+          resolution = ResolutionPreset.medium;
+          activeResolution = "medium";
         } else {
-          preset = ResolutionPreset.veryHigh;
+          resolution = ResolutionPreset.veryHigh;
+          activeResolution = "veryHigh";
         }
+        debugPrint(
+          "📱 iPhone model: ${info.utsname.machine} → Resolution: ${resolution.name}",
+        );
       }
     } catch (e) {
-      preset = ResolutionPreset.high;
+      resolution = ResolutionPreset.veryHigh;
     }
 
-    debugPrint('🎥 [Realtime] Using camera preset: $preset');
+    debugPrint('🎥 [Realtime] Using camera preset: $resolution');
 
     final controller = CameraController(
       ev.camera,
-      preset,
+      resolution,
       enableAudio: false,
       imageFormatGroup: Platform.isIOS
           ? ImageFormatGroup.bgra8888
@@ -123,7 +128,7 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
         lastBox: null,
         lastText: null,
         detected: [],
-        message: "📸 Kamera aktif (${preset.name})",
+        message: "📸 Kamera aktif (${resolution.name})",
       ),
     );
   }

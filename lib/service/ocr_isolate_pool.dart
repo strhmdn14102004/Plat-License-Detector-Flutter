@@ -1,5 +1,3 @@
-// ignore_for_file: body_might_complete_normally_catch_error
-
 import 'dart:async';
 import 'dart:io';
 
@@ -51,15 +49,65 @@ class OcrIsolatePool {
       }
       if (lines.isEmpty) return "";
 
-      String normalize(String t) {
-        return t
-            .replaceAll('8', 'B')
+      String normalize(String raw) {
+        var t = raw
+            .toUpperCase()
+            .replaceAll(RegExp(r'[^A-Z0-9Ø\s\-]'), ' ')
+            .replaceAll(RegExp(r'\s+'), ' ')
+            .trim();
+
+        t = t.replaceAll('4', 'A').replaceAll('7', 'T');
+
+        final re = RegExp(r'^([A-Z]{1,3})\s*([A-Z0-9]{1,5})\s*([A-ZØ]{0,4})$');
+        final m = re.firstMatch(t);
+        if (m == null) return t;
+
+        var prefix = m[1] ?? '';
+        var mid = m[2] ?? '';
+        var suffix = m[3] ?? '';
+
+        prefix = prefix
             .replaceAll('0', 'O')
             .replaceAll('1', 'I')
             .replaceAll('2', 'Z')
-            .replaceAll(RegExp(r'[^A-Z0-9\s\-]'), ' ')
-            .replaceAll(RegExp(r'\s+'), ' ')
-            .trim();
+            .replaceAll('3', 'B')
+            .replaceAll('5', 'S')
+            .replaceAll('6', 'G')
+            .replaceAll('8', 'B');
+
+        mid = mid
+            .replaceAll('O', '0')
+            .replaceAll('Ø', '0')
+            .replaceAll('I', '1')
+            .replaceAll('Z', '2')
+            .replaceAll('T', '7')
+            .replaceAll('S', '5')
+            .replaceAll('B', '8')
+            .replaceAll('G', '6');
+
+        mid = mid.replaceAllMapped(RegExp(r'8'), (m) {
+          final idx = m.start;
+          if (idx > 0 && idx < mid.length - 1) {
+            final before = mid[idx - 1];
+            final after = mid[idx + 1];
+            if ('906'.contains(before) || '906'.contains(after)) return '8';
+          }
+          return '3';
+        });
+
+        suffix = suffix
+            .replaceAll('0', 'O')
+            .replaceAll('Ø', 'O')
+            .replaceAll('Q', 'O')
+            .replaceAll('1', 'I')
+            .replaceAll('2', 'Z')
+            .replaceAll('5', 'S')
+            .replaceAll('6', 'G')
+            .replaceAll('8', 'B')
+            .replaceAll('3', 'B');
+
+        var combined = '$prefix $mid $suffix'.trim();
+        return combined.replaceAll(RegExp(r'\s+'), ' ').trim();
       }
 
       final validPrefix = [
@@ -74,7 +122,6 @@ class OcrIsolatePool {
         'BG',
         'BN',
         'BE',
-
         'A',
         'B',
         'D',
@@ -97,20 +144,17 @@ class OcrIsolatePool {
         'W',
         'AE',
         'AG',
-
         'DK',
         'DR',
         'EA',
         'DH',
         'EB',
         'ED',
-
         'KB',
         'DA',
         'KH',
         'KT',
         'KU',
-
         'DB',
         'DL',
         'DM',
@@ -118,50 +162,36 @@ class OcrIsolatePool {
         'DT',
         'DD',
         'DC',
-
         'DE',
         'DG',
         'PA',
         'PB',
-
         'RI',
         'CC',
         'CD',
       ];
 
-      final plateRegex = RegExp(
-        r'^[A-Z]{1,3}[\s\-]?\d{1,5}[\s\-]?[A-Z]{0,4}$',
-        caseSensitive: true,
-      );
-
-      final timeRegex = RegExp(r'^\d{2}[:.,]?\d{2}$');
+      final plateRegex = RegExp(r'^[A-Z]{1,3}[\s\-]?\d{1,5}[\s\-]?[A-Z]{0,4}$');
 
       String? plate;
-      String? time;
 
       for (final raw in lines) {
         final txt = normalize(raw);
         if (plate == null && plateRegex.hasMatch(txt)) {
           final prefix = txt.split(RegExp(r'[\s\-]+')).first;
           if (validPrefix.contains(prefix)) plate = txt;
-        } else if (time == null && timeRegex.hasMatch(txt)) {
-          time = txt
-              .replaceAll(':', '.')
-              .replaceAll(',', '.')
-              .replaceAll('•', '.');
         }
       }
 
       if (plate != null) {
         final formatted = plate.replaceAll(RegExp(r'\s+'), ' ').trim();
-        return time != null ? '$formatted\n$time' : formatted;
+        debugPrint("🧠 OCR fix output: $formatted");
+        return formatted;
       }
 
-      final fallback = lines.firstWhere(
-        (t) => t.contains(RegExp(r'\d')),
-        orElse: () => lines.first,
-      );
-      return normalize(fallback);
+      final fb = normalize(lines.join(' '));
+      debugPrint("🧠 OCR fallback output: $fb");
+      return fb;
     } catch (e, st) {
       debugPrint("❌ OCR error: $e\n$st");
       return null;

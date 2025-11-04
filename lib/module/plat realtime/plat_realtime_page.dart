@@ -268,9 +268,8 @@ class _CameraLayer extends StatelessWidget {
   final CameraController controller;
   const _CameraLayer({required this.controller});
   @override
-  Widget build(BuildContext context) => Center(
-    child: CameraPreview(controller),
-  );
+  Widget build(BuildContext context) =>
+      Center(child: CameraPreview(controller));
 }
 
 class _IdleLayer extends StatelessWidget {

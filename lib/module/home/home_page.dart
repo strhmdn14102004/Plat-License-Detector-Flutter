@@ -5,6 +5,7 @@ import 'dart:ui';
 
 import 'package:face_recognition/module/home/view_data_page.dart';
 import 'package:face_recognition/module/plat%20capture/plat_capture_page.dart';
+import 'package:face_recognition/module/plat%20gallery/plat_gallery_page.dart';
 import 'package:face_recognition/module/plat%20realtime/plat_realtime_page.dart';
 import 'package:flutter/material.dart';
 
@@ -119,6 +120,20 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                       context,
                       MaterialPageRoute(
                         builder: (_) => const PlateScanCapturePage(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  _MainButton(
+                    title: "Scan From Gallery",
+                    subtitle: "Deteksi plat dari hasil foto (non-realtime)",
+                    icon: Icons.camera_enhance_rounded,
+                    color1: const Color.fromARGB(255, 157, 144, 122),
+                    color2: const Color.fromARGB(255, 114, 102, 72),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const PlateGalleryPage(),
                       ),
                     ),
                   ),
