@@ -3,9 +3,9 @@
 import 'dart:io';
 import 'dart:ui';
 
-import 'package:face_recognition/module/home/plate_capture_page.dart';
 import 'package:face_recognition/module/home/view_data_page.dart';
-import 'package:face_recognition/module/plat/plat_page.dart';
+import 'package:face_recognition/module/plat%20capture/plat_capture_page.dart';
+import 'package:face_recognition/module/plat%20realtime/plat_realtime_page.dart';
 import 'package:flutter/material.dart';
 
 class HomePage extends StatefulWidget {
@@ -118,7 +118,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     onTap: () => Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const PlateCapturePage(),
+                        builder: (_) => const PlateScanCapturePage(),
                       ),
                     ),
                   ),
@@ -430,7 +430,7 @@ class _ShimmerButtonState extends State<_ShimmerButton>
           onTap: () {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const PlateScanPage()),
+              MaterialPageRoute(builder: (_) => const PlateScanRealtimePage()),
             );
           },
           borderRadius: BorderRadius.circular(22),

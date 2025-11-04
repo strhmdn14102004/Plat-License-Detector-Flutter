@@ -2,7 +2,6 @@
 
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
@@ -29,8 +28,9 @@ class OcrIsolatePool {
 
   Future<String?> _process(Uint8List jpeg) async {
     try {
-      var img = imglib.decodeImage(jpeg);
+      final img = imglib.decodeImage(jpeg);
       if (img == null) return null;
+
       final tmp = await getTemporaryDirectory();
       final file = File(
         p.join(tmp.path, 'ocr_${DateTime.now().millisecondsSinceEpoch}.jpg'),
@@ -49,8 +49,121 @@ class OcrIsolatePool {
           if (txt.isNotEmpty) lines.add(txt);
         }
       }
-      return lines.take(2).join('\n');
-    } catch (_) {
+      if (lines.isEmpty) return "";
+
+      String normalize(String t) {
+        return t
+            .replaceAll('8', 'B')
+            .replaceAll('0', 'O')
+            .replaceAll('1', 'I')
+            .replaceAll('2', 'Z')
+            .replaceAll(RegExp(r'[^A-Z0-9\s\-]'), ' ')
+            .replaceAll(RegExp(r'\s+'), ' ')
+            .trim();
+      }
+
+      final validPrefix = [
+        'BL',
+        'BB',
+        'BK',
+        'BA',
+        'BM',
+        'BH',
+        'BD',
+        'BP',
+        'BG',
+        'BN',
+        'BE',
+
+        'A',
+        'B',
+        'D',
+        'E',
+        'F',
+        'T',
+        'Z',
+        'G',
+        'H',
+        'K',
+        'R',
+        'AA',
+        'AD',
+        'AB',
+        'L',
+        'M',
+        'N',
+        'P',
+        'S',
+        'W',
+        'AE',
+        'AG',
+
+        'DK',
+        'DR',
+        'EA',
+        'DH',
+        'EB',
+        'ED',
+
+        'KB',
+        'DA',
+        'KH',
+        'KT',
+        'KU',
+
+        'DB',
+        'DL',
+        'DM',
+        'DN',
+        'DT',
+        'DD',
+        'DC',
+
+        'DE',
+        'DG',
+        'PA',
+        'PB',
+
+        'RI',
+        'CC',
+        'CD',
+      ];
+
+      final plateRegex = RegExp(
+        r'^[A-Z]{1,3}[\s\-]?\d{1,5}[\s\-]?[A-Z]{0,4}$',
+        caseSensitive: true,
+      );
+
+      final timeRegex = RegExp(r'^\d{2}[:.,]?\d{2}$');
+
+      String? plate;
+      String? time;
+
+      for (final raw in lines) {
+        final txt = normalize(raw);
+        if (plate == null && plateRegex.hasMatch(txt)) {
+          final prefix = txt.split(RegExp(r'[\s\-]+')).first;
+          if (validPrefix.contains(prefix)) plate = txt;
+        } else if (time == null && timeRegex.hasMatch(txt)) {
+          time = txt
+              .replaceAll(':', '.')
+              .replaceAll(',', '.')
+              .replaceAll('•', '.');
+        }
+      }
+
+      if (plate != null) {
+        final formatted = plate.replaceAll(RegExp(r'\s+'), ' ').trim();
+        return time != null ? '$formatted\n$time' : formatted;
+      }
+
+      final fallback = lines.firstWhere(
+        (t) => t.contains(RegExp(r'\d')),
+        orElse: () => lines.first,
+      );
+      return normalize(fallback);
+    } catch (e, st) {
+      debugPrint("❌ OCR error: $e\n$st");
       return null;
     }
   }

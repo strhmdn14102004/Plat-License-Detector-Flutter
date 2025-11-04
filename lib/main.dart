@@ -1,5 +1,6 @@
 import 'package:face_recognition/module/home/home_page.dart';
-import 'package:face_recognition/module/plat/plat_bloc.dart';
+import 'package:face_recognition/module/plat%20capture/plat_capture_bloc.dart';
+import 'package:face_recognition/module/plat%20realtime/plat_realtime_bloc.dart';
 import 'package:face_recognition/service/ocr_isolate_pool.dart';
 import 'package:face_recognition/service/yolo_isolate_pool.dart';
 import 'package:flutter/material.dart';
@@ -36,8 +37,13 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiBlocProvider(
       providers: [
-        BlocProvider<PlateBloc>(
-          create: (_) => PlateBloc(yoloPool: yoloPool, ocrPool: ocrPool),
+        BlocProvider(
+          create: (BuildContext context) =>
+              PlateRealtimeBloc(yoloPool: yoloPool, ocrPool: ocrPool),
+        ),
+        BlocProvider(
+          create: (BuildContext context) =>
+              PlateCaptureBloc(yolo: yoloPool, ocr: ocrPool),
         ),
       ],
       child: MaterialApp(
