@@ -25,7 +25,7 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
   DateTime _lastProcessed = DateTime.fromMillisecondsSinceEpoch(0);
   DateTime _lastOcr = DateTime.fromMillisecondsSinceEpoch(0);
   Rect? _smoothBox;
-  String activeResolution = "veryHigh";
+  String activeResolution = "high";
   final int _intervalYolo = 150;
   final int _intervalOcr = 400;
 
@@ -70,8 +70,8 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
     Emitter<PlateRealtimeState> emit,
   ) async {
     final deviceInfo = DeviceInfoPlugin();
-    ResolutionPreset resolution = ResolutionPreset.veryHigh;
-    activeResolution = "veryHigh";
+    ResolutionPreset resolution = ResolutionPreset.high;
+    activeResolution = "high";
     try {
       if (Platform.isAndroid) {
         final android = await deviceInfo.androidInfo;
@@ -79,7 +79,7 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
         if (sdk <= 30) {
           resolution = ResolutionPreset.medium;
         } else {
-          resolution = ResolutionPreset.veryHigh;
+          resolution = ResolutionPreset.high;
         }
       } else if (Platform.isIOS) {
         final info = await deviceInfo.iosInfo;
@@ -89,15 +89,15 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
           resolution = ResolutionPreset.medium;
           activeResolution = "medium";
         } else {
-          resolution = ResolutionPreset.veryHigh;
-          activeResolution = "veryHigh";
+          resolution = ResolutionPreset.high;
+          activeResolution = "high";
         }
         debugPrint(
           "📱 iPhone model: ${info.utsname.machine} → Resolution: ${resolution.name}",
         );
       }
     } catch (e) {
-      resolution = ResolutionPreset.veryHigh;
+      resolution = ResolutionPreset.high;
     }
 
     debugPrint('🎥 [Realtime] Using camera preset: $resolution');

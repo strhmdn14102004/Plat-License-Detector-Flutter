@@ -1,15 +1,15 @@
 import 'package:camera/camera.dart';
 
-abstract class PlateCaptureEvent {}
+abstract class PlateCameraCaptureEvent {}
 
-class StartCaptureCamera extends PlateCaptureEvent {
+class InitializeCamera extends PlateCameraCaptureEvent {
   final CameraDescription camera;
-  StartCaptureCamera(this.camera);
+  InitializeCamera(this.camera);
 }
 
-class StopCaptureCamera extends PlateCaptureEvent {}
+class CapturePhoto extends PlateCameraCaptureEvent {}
 
-class CaptureAndProcessFrame extends PlateCaptureEvent {
+class ResetCamera extends PlateCameraCaptureEvent {
   final CameraDescription camera;
-  CaptureAndProcessFrame(this.camera);
+  ResetCamera(this.camera);
 }

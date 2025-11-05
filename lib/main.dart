@@ -45,7 +45,7 @@ class MyApp extends StatelessWidget {
         ),
         BlocProvider(
           create: (BuildContext context) =>
-              PlateCaptureBloc(yolo: yoloPool, ocr: ocrPool),
+              PlateCameraCaptureBloc(yolo: yoloPool, ocr: ocrPool),
         ),
         BlocProvider(
           create: (_) => PlateGalleryBloc(yolo: yoloPool, ocr: ocrPool),

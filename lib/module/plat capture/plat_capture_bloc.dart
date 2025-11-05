@@ -1,209 +1,217 @@
-// ignore_for_file: unnecessary_overrides, depend_on_referenced_packages
+// ignore_for_file: depend_on_referenced_packages
 
 import 'dart:async';
 import 'dart:io';
 
 import 'package:bloc/bloc.dart';
 import 'package:camera/camera.dart';
-import 'package:device_info_plus/device_info_plus.dart';
-import 'package:face_recognition/module/plat%20capture/plat_capture_event.dart';
-import 'package:face_recognition/module/plat%20capture/plat_capture_state.dart';
 import 'package:face_recognition/service/ocr_isolate_pool.dart';
 import 'package:face_recognition/service/yolo_isolate_pool.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as imglib;
 
-class PlateCaptureBloc extends Bloc<PlateCaptureEvent, PlateCaptureState> {
+import 'plat_capture_event.dart';
+import 'plat_capture_state.dart';
+
+class PlateCameraCaptureBloc
+    extends Bloc<PlateCameraCaptureEvent, PlateCameraCaptureState> {
   final YoloIsolatePool yolo;
   final OcrIsolatePool ocr;
 
-  bool _streamActive = false;
-  Uint8List? _lastFrameBytes;
-  bool _captureInProgress = false;
-  String activeResolution = "high";
-  Rect? _lastBox;
-
-  PlateCaptureBloc({required this.yolo, required this.ocr})
+  PlateCameraCaptureBloc({required this.yolo, required this.ocr})
     : super(
-        PlateCaptureState(
-          isCameraReady: false,
-          controller: null,
+        PlateCameraCaptureState(
+          isReady: false,
           isProcessing: false,
-          lastBox: null,
+          progress: 0.0,
+          message: "Menyiapkan kamera...",
           lastText: null,
-          message: null,
+          preview: null,
+          controller: null,
         ),
       ) {
-    on<StartCaptureCamera>(_onStart);
-    on<StopCaptureCamera>(_onStop);
-    on<CaptureAndProcessFrame>(_onCapture);
+    on<InitializeCamera>(_onInit);
+    on<CapturePhoto>(_onCapture);
+    on<ResetCamera>(_onReset);
   }
 
-  Future<void> _onStart(
-    StartCaptureCamera ev,
-    Emitter<PlateCaptureState> emit,
+  Future<void> _onInit(
+    InitializeCamera ev,
+    Emitter<PlateCameraCaptureState> emit,
   ) async {
-    final info = DeviceInfoPlugin();
-    final deviceInfo = DeviceInfoPlugin();
-    ResolutionPreset resolution = ResolutionPreset.high;
-    activeResolution = "high";
-
     try {
-      if (Platform.isAndroid) {
-        final android = await info.androidInfo;
-        final sdk = android.version.sdkInt;
-        resolution = sdk <= 30
-            ? ResolutionPreset.medium
-            : ResolutionPreset.high;
-      } else if (Platform.isIOS) {
-        final info = await deviceInfo.iosInfo;
-        final model = info.utsname.machine.toLowerCase();
+      final controller = CameraController(
+        ev.camera,
+        ResolutionPreset.high,
+        enableAudio: false,
+        imageFormatGroup: Platform.isIOS
+            ? ImageFormatGroup.bgra8888
+            : ImageFormatGroup.yuv420,
+      );
+      await controller.initialize();
 
-        if (model.contains('iphone13,')) {
-          resolution = ResolutionPreset.medium;
-          activeResolution = "medium";
-        } else {
-          resolution = ResolutionPreset.high;
-          activeResolution = "high";
-        }
-        debugPrint(
-          "📱 iPhone model: ${info.utsname.machine} → Resolution: ${resolution.name}",
-        );
-      }
-    } catch (_) {}
-
-    final controller = CameraController(
-      ev.camera,
-      resolution,
-      enableAudio: false,
-      imageFormatGroup: Platform.isIOS
-          ? ImageFormatGroup.bgra8888
-          : ImageFormatGroup.yuv420,
-    );
-
-    await controller.initialize();
-    await controller.setFocusMode(FocusMode.auto);
-    await controller.setExposureMode(ExposureMode.auto);
-    await controller.lockCaptureOrientation();
-    await controller.setFocusPoint(null);
-
-    _streamActive = true;
-    ocr.start();
-
-    controller.startImageStream((img) async {
-      if (!_streamActive) return;
-
-      _lastFrameBytes = await compute(_convertToJpgIsolate, img);
-    });
-
-    emit(
-      PlateCaptureState(
-        isCameraReady: true,
-        controller: controller,
-        isProcessing: false,
-        lastBox: null,
-        lastText: null,
-        message: "📷 Kamera siap capture (${resolution.name})",
-      ),
-    );
-  }
-
-  Future<void> _onStop(
-    StopCaptureCamera ev,
-    Emitter<PlateCaptureState> emit,
-  ) async {
-    _streamActive = false;
-    try {
-      await state.controller?.stopImageStream();
-      await state.controller?.dispose();
-    } catch (_) {}
-    emit(
-      PlateCaptureState(
-        isCameraReady: false,
-        controller: null,
-        isProcessing: false,
-        lastBox: null,
-        lastText: null,
-        message: "Kamera berhenti",
-      ),
-    );
+      emit(
+        PlateCameraCaptureState(
+          isReady: true,
+          isProcessing: false,
+          progress: 0.0,
+          message: "📸 Kamera siap digunakan",
+          lastText: null,
+          preview: null,
+          controller: controller,
+        ),
+      );
+    } catch (e) {
+      emit(
+        PlateCameraCaptureState(
+          isReady: false,
+          isProcessing: false,
+          progress: 0.0,
+          message: "❌ Gagal inisialisasi kamera: $e",
+          lastText: null,
+          preview: null,
+          controller: null,
+        ),
+      );
+    }
   }
 
   Future<void> _onCapture(
-    CaptureAndProcessFrame ev,
-    Emitter<PlateCaptureState> emit,
+    CapturePhoto ev,
+    Emitter<PlateCameraCaptureState> emit,
   ) async {
-    if (_captureInProgress) return;
-    _captureInProgress = true;
+    final controller = state.controller;
+    if (controller == null || !controller.value.isInitialized) return;
 
     emit(
-      PlateCaptureState(
-        isCameraReady: true,
-        controller: state.controller,
+      PlateCameraCaptureState(
+        isReady: true,
         isProcessing: true,
-        lastBox: null,
+        progress: 0.1,
+        message: "📸 Mengambil foto...",
         lastText: null,
-        message: "🔍 Mencari plat kendaraan...",
+        preview: null,
+        controller: controller,
       ),
     );
 
     try {
-      try {
-        await state.controller?.setFocusMode(FocusMode.auto);
-        await Future.delayed(const Duration(milliseconds: 350));
-      } catch (_) {}
+      if (controller.value.isStreamingImages) {
+        await controller.stopImageStream();
+        await Future.delayed(const Duration(milliseconds: 200));
+      }
 
-      Uint8List? frame = _lastFrameBytes;
-      if (frame == null) {
-        emit(_failed("❌ Tidak ada frame tersedia"));
-        _captureInProgress = false;
+      final file = await controller.takePicture();
+      final bytes = await File(file.path).readAsBytes();
+
+      final img = imglib.decodeImage(bytes);
+      if (img == null) throw Exception("Gagal decode foto");
+
+      final fixed = imglib.bakeOrientation(img);
+      final fullJpg = Uint8List.fromList(imglib.encodeJpg(fixed, quality: 95));
+
+      emit(
+        PlateCameraCaptureState(
+          isReady: true,
+          isProcessing: true,
+          progress: 0.25,
+          message: "🔍 Mendeteksi plat...",
+          lastText: null,
+          preview: fullJpg,
+          controller: controller,
+        ),
+      );
+
+      final detections = await yolo.detect(fullJpg);
+      detections.removeWhere((d) => (d.x2 - d.x1) * (d.y2 - d.y1) < 40000);
+
+      if (detections.isEmpty) {
+        emit(
+          PlateCameraCaptureState(
+            isReady: true,
+            isProcessing: false,
+            progress: 1.0,
+            message: "❌ Plat tidak ditemukan",
+            lastText: "Tidak terbaca",
+            preview: fullJpg,
+            controller: controller,
+          ),
+        );
         return;
       }
 
-      await Future.delayed(const Duration(milliseconds: 60));
+      detections.sort((a, b) => b.score.compareTo(a.score));
+      final best = detections.first;
 
-      List<YoloResult> result = [];
-      for (int i = 0; i < 3; i++) {
-        result = await yolo.detect(frame);
-        if (result.isNotEmpty && result.first.score > 0.45) break;
-        await Future.delayed(const Duration(milliseconds: 250));
-      }
-
-      if (result.isEmpty) {
-        emit(_failed("❌ Plat tidak terdeteksi (YOLO gagal)"));
-        _captureInProgress = false;
-        return;
-      }
-
-      result.sort((a, b) => b.score.compareTo(a.score));
-      final best = result.first;
       final rect = Rect.fromLTWH(
         best.x1.toDouble(),
         best.y1.toDouble(),
         (best.x2 - best.x1).toDouble(),
         (best.y2 - best.y1).toDouble(),
       );
-      _lastBox = _blend(rect, _lastBox);
+
+      final margin = 0.25;
+      final mx = rect.width * margin / 2;
+      final my = rect.height * margin / 2;
+      final expanded = Rect.fromLTRB(
+        (rect.left - mx).clamp(0, fixed.width.toDouble()),
+        (rect.top - my).clamp(0, fixed.height.toDouble()),
+        (rect.right + mx).clamp(0, fixed.width.toDouble()),
+        (rect.bottom + my).clamp(0, fixed.height.toDouble()),
+      );
+
+      debugPrint(
+        "📦 YOLO Box: ${expanded.left.toInt()},${expanded.top.toInt()} → ${expanded.right.toInt()},${expanded.bottom.toInt()}",
+      );
+
+      emit(
+        PlateCameraCaptureState(
+          isReady: true,
+          isProcessing: true,
+          progress: 0.55,
+          message: "✂️ Memotong area plat...",
+          lastText: null,
+          preview: fullJpg,
+          controller: controller,
+        ),
+      );
 
       final cropped = await compute(_cropIsolate, {
-        'jpeg': frame,
-        'rect': _lastBox!,
+        'jpeg': fullJpg,
+        'rect': expanded,
       });
       if (cropped == null) {
-        emit(_failed("❌ Gagal crop gambar"));
-        _captureInProgress = false;
+        emit(
+          PlateCameraCaptureState(
+            isReady: true,
+            isProcessing: false,
+            progress: 1.0,
+            message: "❌ Gagal crop gambar",
+            lastText: "Tidak terbaca",
+            preview: fullJpg,
+            controller: controller,
+          ),
+        );
         return;
       }
 
+      try {
+        File(
+          '/storage/emulated/0/Download/crop_test.jpg',
+        ).writeAsBytesSync(cropped);
+        debugPrint("💾 Crop saved to /Download/crop_test.jpg");
+      } catch (_) {}
+
       emit(
-        PlateCaptureState(
-          isCameraReady: true,
-          controller: state.controller,
+        PlateCameraCaptureState(
+          isReady: true,
           isProcessing: true,
-          lastBox: _lastBox,
+          progress: 0.75,
+          message: "🧠 Memproses OCR...",
           lastText: null,
-          message: "🧠 Memproses OCR (akurat, mohon tunggu)...",
+          preview: cropped,
+          controller: controller,
         ),
       );
 
@@ -211,135 +219,84 @@ class PlateCaptureBloc extends Bloc<PlateCaptureEvent, PlateCaptureState> {
       final sub = ocr.results.listen((t) {
         if (t.isNotEmpty && t.length > bestText.length) bestText = t;
       });
-
       ocr.push(cropped);
-      final limit = DateTime.now().add(const Duration(seconds: 6));
+
+      final limit = DateTime.now().add(const Duration(seconds: 5));
       while (DateTime.now().isBefore(limit)) {
         await Future.delayed(const Duration(milliseconds: 200));
       }
       await sub.cancel();
 
       final text = bestText.trim();
-
       emit(
-        PlateCaptureState(
-          isCameraReady: true,
-          controller: state.controller,
+        PlateCameraCaptureState(
+          isReady: true,
           isProcessing: false,
-          lastBox: _lastBox,
-          lastText: text.isEmpty ? "Tidak terbaca" : text,
+          progress: 1.0,
           message: text.isEmpty ? "⚠️ Tidak terbaca" : "✅ Plat: $text",
+          lastText: text.isEmpty ? "Tidak terbaca" : text,
+          preview: cropped,
+          controller: controller,
         ),
       );
-    } catch (e) {
-      emit(_failed("❌ Error: $e"));
-    } finally {
-      _captureInProgress = false;
+    } catch (e, st) {
+      debugPrint("❌ Capture error: $e\n$st");
+      emit(
+        PlateCameraCaptureState(
+          isReady: true,
+          isProcessing: false,
+          progress: 1.0,
+          message: "❌ Error: $e",
+          lastText: "Error",
+          preview: null,
+          controller: state.controller,
+        ),
+      );
     }
   }
 
-  PlateCaptureState _failed(String msg) {
-    return PlateCaptureState(
-      isCameraReady: true,
-      controller: state.controller,
-      isProcessing: false,
-      lastBox: null,
-      lastText: "Tidak terbaca",
-      message: msg,
+  Future<void> _onReset(
+    ResetCamera ev,
+    Emitter<PlateCameraCaptureState> emit,
+  ) async {
+    final cam = state.controller;
+    if (cam != null) {
+      try {
+        await cam.dispose();
+      } catch (_) {}
+    }
+    emit(
+      PlateCameraCaptureState(
+        isReady: false,
+        isProcessing: false,
+        progress: 0.0,
+        message: "🔄 Menghidupkan ulang kamera...",
+        lastText: null,
+        preview: null,
+        controller: null,
+      ),
     );
-  }
-
-  static Future<Uint8List?> _convertToJpgIsolate(CameraImage img) async {
-    try {
-      late imglib.Image image;
-      if (Platform.isIOS && img.format.group == ImageFormatGroup.bgra8888) {
-        final plane = img.planes.first;
-        image = imglib.Image.fromBytes(
-          width: img.width,
-          height: img.height,
-          bytes: plane.bytes.buffer,
-          order: imglib.ChannelOrder.bgra,
-        );
-      } else {
-        image = _yuvToRgb(img);
-      }
-
-      final enhanced = imglib.adjustColor(
-        image,
-        contrast: 1.1,
-        saturation: 1.05,
-      );
-      final sharpened = imglib.convolution(
-        enhanced,
-        filter: [0, -1, 0, -1, 5, -1, 0, -1, 0],
-      );
-      return Uint8List.fromList(imglib.encodeJpg(sharpened, quality: 95));
-    } catch (_) {
-      return null;
-    }
-  }
-
-  static imglib.Image _yuvToRgb(CameraImage img) {
-    final w = img.width;
-    final h = img.height;
-    final out = imglib.Image(width: w, height: h);
-    final Y = img.planes[0].bytes;
-    final U = img.planes[1].bytes;
-    final V = img.planes[2].bytes;
-    final uvRow = img.planes[1].bytesPerRow;
-    final uvPix = img.planes[1].bytesPerPixel ?? 1;
-
-    for (int y = 0; y < h; y++) {
-      for (int x = 0; x < w; x++) {
-        final uvIndex = uvPix * (x ~/ 2) + uvRow * (y ~/ 2);
-        final yp = Y[y * w + x];
-        final up = U[uvIndex];
-        final vp = V[uvIndex];
-        int r = (yp + vp * 1436 / 1024 - 179).clamp(0, 255).toInt();
-        int g = (yp - up * 46549 / 131072 + 44 - vp * 93604 / 131072 + 91)
-            .clamp(0, 255)
-            .toInt();
-        int b = (yp + up * 1814 / 1024 - 227).clamp(0, 255).toInt();
-        out.setPixelRgb(x, y, r, g, b);
-      }
-    }
-    return imglib.copyRotate(out, angle: 90);
+    await Future.delayed(const Duration(milliseconds: 300));
+    add(InitializeCamera(ev.camera));
   }
 
   static Uint8List? _cropIsolate(Map<String, dynamic> args) {
-    final jpeg = args['jpeg'] as Uint8List;
-    final r = args['rect'] as Rect;
     try {
+      final jpeg = args['jpeg'] as Uint8List;
+      final r = args['rect'] as Rect;
       final img = imglib.decodeImage(jpeg);
       if (img == null) return null;
 
-      final marginX = (r.width * 0.2).round();
-      final marginY = (r.height * 0.15).round();
-      final x = (r.left - marginX).clamp(0, img.width - 1).toInt();
-      final y = (r.top - marginY).clamp(0, img.height - 1).toInt();
-      final w = ((r.width + marginX * 2).clamp(0, img.width - x)).toInt();
-      final h = ((r.height + marginY * 2).clamp(0, img.height - y)).toInt();
+      final x = r.left.clamp(0, img.width - 1).toInt();
+      final y = r.top.clamp(0, img.height - 1).toInt();
+      final w = (r.width.clamp(1, img.width - x)).toInt();
+      final h = (r.height.clamp(1, img.height - y)).toInt();
 
       final cropped = imglib.copyCrop(img, x: x, y: y, width: w, height: h);
       return Uint8List.fromList(imglib.encodeJpg(cropped, quality: 95));
-    } catch (_) {
+    } catch (e) {
+      debugPrint("❌ Crop error: $e");
       return null;
     }
-  }
-
-  Rect _blend(Rect n, Rect? p, {double a = 0.3}) {
-    if (p == null) return n;
-    double lerp(double x, double y) => x + (y - x) * a;
-    return Rect.fromLTWH(
-      lerp(p.left, n.left),
-      lerp(p.top, n.top),
-      lerp(p.width, n.width),
-      lerp(p.height, n.height),
-    );
-  }
-
-  @override
-  Future<void> close() async {
-    return super.close();
   }
 }

@@ -119,7 +119,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     onTap: () => Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const PlateScanCapturePage(),
+                        builder: (_) => const PlateCameraCapturePage(),
                       ),
                     ),
                   ),
