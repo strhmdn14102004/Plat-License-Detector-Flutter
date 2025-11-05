@@ -1,17 +1,15 @@
-// ignore_for_file: dead_code, depend_on_referenced_packages, invalid_use_of_visible_for_testing_member
-
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:bloc/bloc.dart';
 import 'package:camera/camera.dart';
 import 'package:device_info_plus/device_info_plus.dart';
-import 'package:face_recognition/module/plat%20realtime/plat_realtime_event.dart';
-import 'package:face_recognition/module/plat%20realtime/plat_realtime_state.dart';
+import 'package:face_recognition/module/plat realtime/plat_realtime_event.dart';
+import 'package:face_recognition/module/plat realtime/plat_realtime_state.dart';
 import 'package:face_recognition/service/ocr_isolate_pool.dart';
 import 'package:face_recognition/service/yolo_isolate_pool.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image/image.dart' as imglib;
 
 class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
@@ -26,6 +24,7 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
   DateTime _lastOcr = DateTime.fromMillisecondsSinceEpoch(0);
   Rect? _smoothBox;
   String activeResolution = "high";
+
   final int _intervalYolo = 200;
   final int _intervalOcr = 600;
 
@@ -72,26 +71,29 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
     final deviceInfo = DeviceInfoPlugin();
     ResolutionPreset resolution = ResolutionPreset.high;
     activeResolution = "high";
+
     try {
       if (Platform.isAndroid) {
         final android = await deviceInfo.androidInfo;
         final sdk = android.version.sdkInt;
-        if (sdk <= 30) {
-          resolution = ResolutionPreset.medium;
-        } else {
-          resolution = ResolutionPreset.high;
-        }
+        resolution = sdk <= 30
+            ? ResolutionPreset.medium
+            : ResolutionPreset.high;
+        activeResolution = resolution.name;
       } else if (Platform.isIOS) {
         final info = await deviceInfo.iosInfo;
         final model = info.utsname.machine.toLowerCase();
 
-        if (model.contains('iphone13,')) {
-          resolution = ResolutionPreset.medium;
-          activeResolution = "medium";
-        } else {
+        if (model.contains('iphone10,') ||
+            model.contains('iphone11,') ||
+            model.contains('iphone12,1')) {
           resolution = ResolutionPreset.high;
           activeResolution = "high";
+        } else {
+          resolution = ResolutionPreset.veryHigh;
+          activeResolution = "veryHigh";
         }
+
         debugPrint(
           "📱 iPhone model: ${info.utsname.machine} → Resolution: ${resolution.name}",
         );
@@ -112,6 +114,11 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
     );
 
     await controller.initialize();
+
+    if (Platform.isIOS) {
+      await controller.lockCaptureOrientation(DeviceOrientation.portraitUp);
+    }
+
     _streamActive = true;
     ocrPool.start();
 
@@ -142,6 +149,7 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
       await state.controller?.stopImageStream();
       await state.controller?.dispose();
     } catch (_) {}
+
     emit(
       PlateRealtimeState(
         isCameraReady: false,
@@ -161,6 +169,7 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
   ) async {
     final now = DateTime.now();
     if (_busy) return;
+
     final diff = now.difference(_lastFrame).inMilliseconds;
     if (diff > 0) _fps = 1000 / diff;
     _lastFrame = now;
@@ -172,6 +181,7 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
     try {
       final bytes = await _toRGB(ev.image);
       if (bytes == null) return;
+
       final result = await yoloPool.detect(bytes);
       if (result.isEmpty) return;
 
@@ -220,12 +230,13 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
           bytes: p.bytes.buffer,
           order: imglib.ChannelOrder.bgra,
         );
-        return Uint8List.fromList(imglib.encodeJpg(image, quality: 50));
+        return Uint8List.fromList(imglib.encodeJpg(image, quality: 90));
       } else {
         final i = _yuvToRgb(img);
-        return Uint8List.fromList(imglib.encodeJpg(i, quality: 50));
+        return Uint8List.fromList(imglib.encodeJpg(i, quality: 90));
       }
-    } catch (_) {
+    } catch (e) {
+      debugPrint("⚠️ _toRGB error: $e");
       return null;
     }
   }
@@ -260,13 +271,17 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
   Future<Uint8List?> _crop(Uint8List jpeg, Rect rect) async {
     final img = imglib.decodeImage(jpeg);
     if (img == null) return null;
-    final cropped = imglib.copyCrop(
-      img,
-      x: rect.left.toInt(),
-      y: rect.top.toInt(),
-      width: rect.width.toInt(),
-      height: rect.height.toInt(),
-    );
+
+    final scaleX = img.width / 640;
+    final scaleY = img.height / 640;
+    final sx = (scaleX + scaleY) / 2;
+
+    final x = (rect.left * sx).round().clamp(0, img.width - 1);
+    final y = (rect.top * sx).round().clamp(0, img.height - 1);
+    final w = (rect.width * sx).round().clamp(1, img.width - x);
+    final h = (rect.height * sx).round().clamp(1, img.height - y);
+
+    final cropped = imglib.copyCrop(img, x: x, y: y, width: w, height: h);
     return Uint8List.fromList(imglib.encodeJpg(cropped, quality: 90));
   }
 

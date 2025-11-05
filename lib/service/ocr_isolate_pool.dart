@@ -58,7 +58,7 @@ class OcrIsolatePool {
       for (final block in result.blocks) {
         for (final line in block.lines) {
           final conf = line.confidence ?? 0.0;
-          if (conf < 0.6) continue; // 🔧 turunkan ambang biar lebih toleran
+          if (conf < 0.5) continue; // 🔧 turunkan ambang biar lebih toleran
           final txt = line.text.trim().toUpperCase();
           if (txt.isNotEmpty) lines.add(txt);
         }
