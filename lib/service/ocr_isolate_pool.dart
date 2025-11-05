@@ -38,8 +38,9 @@ class OcrIsolatePool {
       if (img == null) return null;
 
       if (isRealtime) {
+        // 🌤️ hanya sedikit peningkatan brightness dan kontras
         img = imglib.adjustColor(img, brightness: 0.05, contrast: 1.15);
-        img = imglib.gaussianBlur(img, radius: 1);
+        // ❌ gaussianBlur dihapus (tidak stabil di iOS)
       }
 
       final tmp = await getTemporaryDirectory();
@@ -57,7 +58,7 @@ class OcrIsolatePool {
       for (final block in result.blocks) {
         for (final line in block.lines) {
           final conf = line.confidence ?? 0.0;
-          if (conf < 0.75) continue;
+          if (conf < 0.6) continue; // 🔧 turunkan ambang biar lebih toleran
           final txt = line.text.trim().toUpperCase();
           if (txt.isNotEmpty) lines.add(txt);
         }

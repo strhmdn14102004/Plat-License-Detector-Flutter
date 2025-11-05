@@ -26,8 +26,8 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
   DateTime _lastOcr = DateTime.fromMillisecondsSinceEpoch(0);
   Rect? _smoothBox;
   String activeResolution = "high";
-  final int _intervalYolo = 150;
-  final int _intervalOcr = 400;
+  final int _intervalYolo = 200;
+  final int _intervalOcr = 600;
 
   StreamSubscription<String>? _ocrSub;
 
