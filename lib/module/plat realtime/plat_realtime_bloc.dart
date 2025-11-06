@@ -223,14 +223,17 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
   Future<Uint8List?> _toRGB(CameraImage img) async {
     try {
       if (Platform.isIOS && img.format.group == ImageFormatGroup.bgra8888) {
-        final p = img.planes.first;
+        final plane = img.planes.first;
         final image = imglib.Image.fromBytes(
           width: img.width,
           height: img.height,
-          bytes: p.bytes.buffer,
+          bytes: plane.bytes.buffer,
+          rowStride: plane.bytesPerRow,
+          numChannels: plane.bytesPerPixel ?? 4,
           order: imglib.ChannelOrder.bgra,
         );
-        return Uint8List.fromList(imglib.encodeJpg(image, quality: 90));
+        final rotated = imglib.copyRotate(image, angle: 90);
+        return Uint8List.fromList(imglib.encodeJpg(rotated, quality: 90));
       } else {
         final i = _yuvToRgb(img);
         return Uint8List.fromList(imglib.encodeJpg(i, quality: 90));
@@ -274,12 +277,11 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
 
     final scaleX = img.width / 640;
     final scaleY = img.height / 640;
-    final sx = (scaleX + scaleY) / 2;
 
-    final x = (rect.left * sx).round().clamp(0, img.width - 1);
-    final y = (rect.top * sx).round().clamp(0, img.height - 1);
-    final w = (rect.width * sx).round().clamp(1, img.width - x);
-    final h = (rect.height * sx).round().clamp(1, img.height - y);
+    final x = (rect.left * scaleX).round().clamp(0, img.width - 1);
+    final y = (rect.top * scaleY).round().clamp(0, img.height - 1);
+    final w = (rect.width * scaleX).round().clamp(1, img.width - x);
+    final h = (rect.height * scaleY).round().clamp(1, img.height - y);
 
     final cropped = imglib.copyCrop(img, x: x, y: y, width: w, height: h);
     return Uint8List.fromList(imglib.encodeJpg(cropped, quality: 90));

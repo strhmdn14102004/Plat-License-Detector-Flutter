@@ -155,10 +155,19 @@ class PlateCameraCaptureBloc
       final mx = rect.width * margin / 2;
       final my = rect.height * margin / 2;
       final expanded = Rect.fromLTRB(
-        (rect.left - mx).clamp(0, fixed.width.toDouble()),
-        (rect.top - my).clamp(0, fixed.height.toDouble()),
-        (rect.right + mx).clamp(0, fixed.width.toDouble()),
-        (rect.bottom + my).clamp(0, fixed.height.toDouble()),
+        (rect.left - mx).clamp(0, 640.0),
+        (rect.top - my).clamp(0, 640.0),
+        (rect.right + mx).clamp(0, 640.0),
+        (rect.bottom + my).clamp(0, 640.0),
+      );
+
+      final scaleX = fixed.width / 640.0;
+      final scaleY = fixed.height / 640.0;
+      final scaledRect = Rect.fromLTRB(
+        expanded.left * scaleX,
+        expanded.top * scaleY,
+        expanded.right * scaleX,
+        expanded.bottom * scaleY,
       );
 
       debugPrint(
@@ -179,7 +188,7 @@ class PlateCameraCaptureBloc
 
       final cropped = await compute(_cropIsolate, {
         'jpeg': fullJpg,
-        'rect': expanded,
+        'rect': scaledRect,
       });
       if (cropped == null) {
         emit(
