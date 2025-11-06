@@ -29,6 +29,8 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
   int _sensorOrientation = 90;
   CameraLensDirection? _lensDirection;
   Size? _lastFrameSize;
+  Size? _previewSize;
+  int _frameRotation = 0;
 
   final int _intervalYolo = 200;
   final int _intervalOcr = 600;
@@ -113,15 +115,22 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
     _lensDirection = controller.description.lensDirection;
     _smoothBox = null;
     _lastFrameSize = null;
+    _previewSize = controller.value.previewSize;
+    _frameRotation = _computeRotation(controller.value.deviceOrientation);
 
     if (Platform.isIOS) {
-      await controller.lockCaptureOrientation(DeviceOrientation.portraitUp);
+      try {
+        await controller.lockCaptureOrientation(DeviceOrientation.portraitUp);
+      } catch (e) {
+        debugPrint('⚠️ Failed to lock orientation: $e');
+      }
+      _frameRotation = _computeRotation(controller.value.deviceOrientation);
     }
 
     _streamActive = true;
     ocrPool.start();
 
-    controller.startImageStream((img) {
+    await controller.startImageStream((img) {
       if (!_streamActive) return;
       add(RealtimeFrameArrived(img, controller));
     });
@@ -152,6 +161,8 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
     _smoothBox = null;
     _lensDirection = null;
     _lastFrameSize = null;
+    _previewSize = null;
+    _frameRotation = 0;
 
     emit(
       state.copyWith(
@@ -171,6 +182,12 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
   ) async {
     final now = DateTime.now();
     if (_busy) return;
+
+    _frameRotation = _computeRotation(ev.controller.value.deviceOrientation);
+    final previewSize = ev.controller.value.previewSize;
+    if (previewSize != null) {
+      _previewSize = previewSize;
+    }
 
     final diff = now.difference(_lastFrame).inMilliseconds;
     if (diff > 0) _fps = 1000 / diff;
@@ -244,7 +261,7 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
         image = _yuvToRgb(img);
       }
 
-      image = _applyOrientation(image);
+      image = _applyOrientation(image, rotationOverride: _frameRotation);
       return Uint8List.fromList(imglib.encodeJpg(image, quality: 90));
     } catch (e) {
       debugPrint("⚠️ _toRGB error: $e");
@@ -292,22 +309,31 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
     );
   }
 
-  imglib.Image _applyOrientation(imglib.Image image) {
-    final orientation = _sensorOrientation % 360;
-    imglib.Image rotated;
-    switch (orientation) {
-      case 90:
-        rotated = imglib.copyRotate(image, angle: 90);
-        break;
-      case 180:
-        rotated = imglib.copyRotate(image, angle: 180);
-        break;
-      case 270:
-        rotated = imglib.copyRotate(image, angle: 270);
-        break;
-      default:
-        rotated = image;
-        break;
+  imglib.Image _applyOrientation(
+    imglib.Image image, {
+    int? rotationOverride,
+  }) {
+    int rotation = (rotationOverride ?? _sensorOrientation) % 360;
+
+    if (Platform.isIOS && _previewSize != null) {
+      final bool expectsPortrait =
+          _previewSize!.height >= _previewSize!.width;
+      final bool rawIsPortrait = image.height >= image.width;
+
+      if (expectsPortrait) {
+        if (!rawIsPortrait && rotation % 180 == 0) {
+          rotation = (rotation + 90) % 360;
+        }
+      } else {
+        if (rawIsPortrait && rotation % 180 == 0) {
+          rotation = (rotation + 90) % 360;
+        }
+      }
+    }
+
+    imglib.Image rotated = image;
+    if (rotation != 0) {
+      rotated = imglib.copyRotate(image, angle: rotation);
     }
 
     if (_lensDirection == CameraLensDirection.front) {
@@ -365,6 +391,30 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
       lerp(p.width, n.width),
       lerp(p.height, n.height),
     );
+  }
+
+  int _computeRotation(DeviceOrientation orientation) {
+    final orientationDegrees = _deviceOrientationToDegrees(orientation);
+    final lens = _lensDirection ?? CameraLensDirection.back;
+    if (lens == CameraLensDirection.front) {
+      return (_sensorOrientation - orientationDegrees + 360) % 360;
+    }
+    return (_sensorOrientation + orientationDegrees) % 360;
+  }
+
+  int _deviceOrientationToDegrees(DeviceOrientation orientation) {
+    switch (orientation) {
+      case DeviceOrientation.portraitUp:
+        return 0;
+      case DeviceOrientation.landscapeLeft:
+        return 90;
+      case DeviceOrientation.portraitDown:
+        return 180;
+      case DeviceOrientation.landscapeRight:
+        return 270;
+      default:
+        return 0;
+    }
   }
 
   @override
