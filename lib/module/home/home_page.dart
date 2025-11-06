@@ -8,6 +8,7 @@ import 'package:vehicle_identification_number/module/home/view_data_page.dart';
 import 'package:vehicle_identification_number/module/plat%20capture/plat_capture_page.dart';
 import 'package:vehicle_identification_number/module/plat%20gallery/plat_gallery_page.dart';
 import 'package:vehicle_identification_number/module/plat%20realtime/plat_realtime_page.dart';
+import 'package:vehicle_identification_number/module/zoom%20feature%20dengan%20enchange/plat_capture_zoom_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -137,6 +138,22 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                       ),
                     ),
                   ),
+                  const SizedBox(height: 18),
+                  if (Platform.isIOS)
+                    _MainButton(
+                      title: "Zoom Fitur With Enchange (testing)",
+                      subtitle: "Deteksi plat dengan fitur zoom kamera",
+                      icon: Icons.camera_enhance_rounded,
+                      color1: const Color.fromARGB(255, 101, 57, 78),
+                      color2: const Color.fromARGB(255, 233, 133, 171),
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const PlateCameraCaptureZoomPage(),
+                        ),
+                      ),
+                    ),
+
                   const SizedBox(height: 18),
 
                   _MainButton(
