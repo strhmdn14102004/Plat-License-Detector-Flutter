@@ -209,10 +209,10 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
       );
 
       final bounds = frameSize ?? Size.zero;
-      final expanded = bounds.isEmpty
+      final scaledRect = bounds.isEmpty
           ? rawRect
           : expandRectWithinBounds(rawRect, bounds, marginFactor: 0.2);
-      _smoothBox = _blend(expanded, _smoothBox);
+      _smoothBox = _blend(scaledRect, _smoothBox);
 
       if (now.difference(_lastOcr).inMilliseconds > _intervalOcr) {
         _lastOcr = now;
@@ -348,22 +348,12 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
   }
 
   Future<Uint8List?> _crop(Uint8List jpeg, Rect rect) async {
-    final img = imglib.decodeImage(jpeg);
-    if (img == null) return null;
-
-    final expanded = expandRectWithinBounds(
+    return cropPlateRegionSync(
+      jpeg,
       rect,
-      Size(img.width.toDouble(), img.height.toDouble()),
       marginFactor: 0.25,
+      quality: 90,
     );
-
-    final int x = expanded.left.round().clamp(0, img.width - 1);
-    final int y = expanded.top.round().clamp(0, img.height - 1);
-    final int w = expanded.width.round().clamp(1, img.width - x);
-    final int h = expanded.height.round().clamp(1, img.height - y);
-
-    final cropped = imglib.copyCrop(img, x: x, y: y, width: w, height: h);
-    return Uint8List.fromList(imglib.encodeJpg(cropped, quality: 90));
   }
 
   Rect _blend(Rect n, Rect? p, {double a = 0.3}) {

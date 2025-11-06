@@ -2,6 +2,7 @@
 
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:bloc/bloc.dart';
 import 'package:camera/camera.dart';
@@ -135,12 +136,6 @@ class PlateCameraCaptureBloc
         best.x2.toDouble(),
         best.y2.toDouble(),
       );
-      final expanded = expandRectWithinBounds(
-        detectionRect,
-        Size(fixed.width.toDouble(), fixed.height.toDouble()),
-        marginFactor: 0.3,
-      );
-
       emit(
         state.copyWith(
           progress: 0.55,
@@ -149,10 +144,11 @@ class PlateCameraCaptureBloc
         ),
       );
 
-      final cropped = await compute(_cropIsolate, {
-        'jpeg': fullJpg,
-        'rect': scaledRect,
-      });
+      final cropped = await cropPlateRegion(
+        fullJpg,
+        detectionRect,
+        marginFactor: 0.3,
+      );
       if (cropped == null) {
         emit(
           state.copyWith(
@@ -219,25 +215,5 @@ class PlateCameraCaptureBloc
     );
     await Future.delayed(const Duration(milliseconds: 300));
     add(InitializeCamera(ev.camera));
-  }
-
-  static Uint8List? _cropIsolate(Map<String, dynamic> args) {
-    try {
-      final jpeg = args['jpeg'] as Uint8List;
-      final r = args['rect'] as Rect;
-      final img = imglib.decodeImage(jpeg);
-      if (img == null) return null;
-
-      final x = r.left.clamp(0, (img.width - 1).toDouble()).toInt();
-      final y = r.top.clamp(0, (img.height - 1).toDouble()).toInt();
-      final w = (r.width.clamp(1, (img.width - x).toDouble())).toInt();
-      final h = (r.height.clamp(1, (img.height - y).toDouble())).toInt();
-
-      final cropped = imglib.copyCrop(img, x: x, y: y, width: w, height: h);
-      return Uint8List.fromList(imglib.encodeJpg(cropped, quality: 95));
-    } catch (e) {
-      debugPrint("❌ Crop error: $e");
-      return null;
-    }
   }
 }

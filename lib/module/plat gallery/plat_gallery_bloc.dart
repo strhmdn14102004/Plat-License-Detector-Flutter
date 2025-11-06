@@ -1,6 +1,7 @@
 // ignore_for_file: depend_on_referenced_packages
 
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:bloc/bloc.dart';
 import 'package:face_recognition/module/plat gallery/plat_gallery_event.dart';
@@ -92,12 +93,6 @@ class PlateGalleryBloc extends Bloc<PlateGalleryEvent, PlateGalleryState> {
         best.x2.toDouble(),
         best.y2.toDouble(),
       );
-      final expanded = expandRectWithinBounds(
-        rect,
-        const Size(kYoloInputSize.toDouble(), kYoloInputSize.toDouble()),
-        marginFactor: 0.25,
-      );
-
       emit(
         PlateGalleryState(
           isProcessing: true,
@@ -108,10 +103,11 @@ class PlateGalleryBloc extends Bloc<PlateGalleryEvent, PlateGalleryState> {
         ),
       );
 
-      final cropped = await compute(_cropIsolate, {
-        'jpeg': jpg640,
-        'rect': expanded,
-      });
+      final cropped = await cropPlateRegion(
+        jpg640,
+        rect,
+        marginFactor: 0.25,
+      );
 
       if (cropped == null) {
         emit(
@@ -162,26 +158,6 @@ class PlateGalleryBloc extends Bloc<PlateGalleryEvent, PlateGalleryState> {
           preview: ev.imageBytes,
         ),
       );
-    }
-  }
-
-  static Uint8List? _cropIsolate(Map<String, dynamic> args) {
-    try {
-      final jpeg = args['jpeg'] as Uint8List;
-      final r = args['rect'] as Rect;
-
-      final img = imglib.decodeImage(jpeg);
-      if (img == null) return null;
-
-      final x = r.left.clamp(0, img.width - 1).toInt();
-      final y = r.top.clamp(0, img.height - 1).toInt();
-      final w = (r.width.clamp(1, img.width - x)).toInt();
-      final h = (r.height.clamp(1, img.height - y)).toInt();
-
-      final cropped = imglib.copyCrop(img, x: x, y: y, width: w, height: h);
-      return Uint8List.fromList(imglib.encodeJpg(cropped, quality: 95));
-    } catch (_) {
-      return null;
     }
   }
 }
