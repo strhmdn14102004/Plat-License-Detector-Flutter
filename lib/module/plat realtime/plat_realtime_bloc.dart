@@ -275,10 +275,11 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
     for (int y = 0; y < height; y++) {
       final srcOffset = y * rowStride;
       final dstOffset = y * rowBytes;
+      final slice = bytes.buffer.asUint8List(srcOffset, rowBytes);
       buffer.setRange(
         dstOffset,
         dstOffset + rowBytes,
-        bytes.sublistView(srcOffset, srcOffset + rowBytes),
+        slice,
       );
     }
 

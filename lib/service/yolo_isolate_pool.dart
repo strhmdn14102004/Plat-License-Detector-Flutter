@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:isolate';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as imglib;
@@ -152,12 +153,19 @@ class YoloIsolatePool {
           height: resizedHeight,
           interpolation: imglib.Interpolation.linear,
         );
-        imglib.copyInto(
-          letterbox,
-          resized,
-          dstX: offsetX,
-          dstY: offsetY,
-        );
+        for (int y = 0; y < resized.height; y++) {
+          for (int x = 0; x < resized.width; x++) {
+            final pixel = resized.getPixel(x, y);
+            letterbox.setPixelRgba(
+              offsetX + x,
+              offsetY + y,
+              pixel.r,
+              pixel.g,
+              pixel.b,
+              pixel.a,
+            );
+          }
+        }
 
         final input = List<double>.filled(inputSize * inputSize * 3, 0.0);
         int index = 0;
