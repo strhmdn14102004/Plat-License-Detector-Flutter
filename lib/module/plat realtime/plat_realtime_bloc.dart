@@ -82,11 +82,11 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
         if (model.contains('iphone10,') ||
             model.contains('iphone11,') ||
             model.contains('iphone12,1')) {
-          resolution = ResolutionPreset.high;
-          activeResolution = "high";
+          resolution = ResolutionPreset.medium;
+          activeResolution = "medium";
         } else {
-          resolution = ResolutionPreset.veryHigh;
-          activeResolution = "veryHigh";
+          resolution = ResolutionPreset.medium;
+          activeResolution = "medium";
         }
 
         debugPrint(
