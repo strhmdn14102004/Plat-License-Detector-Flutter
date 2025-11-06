@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:isolate';
+import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as imglib;
@@ -133,16 +135,43 @@ class YoloIsolatePool {
           return;
         }
 
-        final resized = imglib.copyResize(
-          img,
-          width: inputSize,
-          height: inputSize,
+        final int originalWidth = img.width;
+        final int originalHeight = img.height;
+        final double scale = math.min(
+          inputSize / originalWidth,
+          inputSize / originalHeight,
         );
+        final int resizedWidth = math.max(1, (originalWidth * scale).round());
+        final int resizedHeight = math.max(1, (originalHeight * scale).round());
+        final int offsetX = ((inputSize - resizedWidth) / 2).round();
+        final int offsetY = ((inputSize - resizedHeight) / 2).round();
+
+        final imglib.Image letterbox = imglib.Image(width: inputSize, height: inputSize);
+        final imglib.Image resized = imglib.copyResize(
+          img,
+          width: resizedWidth,
+          height: resizedHeight,
+          interpolation: imglib.Interpolation.linear,
+        );
+        for (int y = 0; y < resized.height; y++) {
+          for (int x = 0; x < resized.width; x++) {
+            final pixel = resized.getPixel(x, y);
+            letterbox.setPixelRgba(
+              offsetX + x,
+              offsetY + y,
+              pixel.r,
+              pixel.g,
+              pixel.b,
+              pixel.a,
+            );
+          }
+        }
+
         final input = List<double>.filled(inputSize * inputSize * 3, 0.0);
         int index = 0;
         for (int y = 0; y < inputSize; y++) {
           for (int x = 0; x < inputSize; x++) {
-            final pixel = resized.getPixel(x, y);
+            final pixel = letterbox.getPixel(x, y);
             input[index++] = pixel.r / 255.0;
             input[index++] = pixel.g / 255.0;
             input[index++] = pixel.b / 255.0;
@@ -161,6 +190,9 @@ class YoloIsolatePool {
         final hs = output[0][3];
         final confs = output[0][4];
 
+        final double invScale = scale == 0 ? 1.0 : 1.0 / scale;
+        final double padX = offsetX.toDouble();
+        final double padY = offsetY.toDouble();
         final results = <Map<String, dynamic>>[];
         for (int i = 0; i < 8400; i++) {
           final score = confs[i];
@@ -169,11 +201,27 @@ class YoloIsolatePool {
           final y = ys[i];
           final w = ws[i];
           final h = hs[i];
+          final double rawX1 = (x - w / 2) * inputSize;
+          final double rawY1 = (y - h / 2) * inputSize;
+          final double rawX2 = (x + w / 2) * inputSize;
+          final double rawY2 = (y + h / 2) * inputSize;
+
+          final double mappedX1 = ((rawX1 - padX) * invScale)
+              .clamp(0, originalWidth.toDouble());
+          final double mappedY1 = ((rawY1 - padY) * invScale)
+              .clamp(0, originalHeight.toDouble());
+          final double mappedX2 = ((rawX2 - padX) * invScale)
+              .clamp(0, originalWidth.toDouble());
+          final double mappedY2 = ((rawY2 - padY) * invScale)
+              .clamp(0, originalHeight.toDouble());
+
+          if (mappedX2 <= mappedX1 || mappedY2 <= mappedY1) continue;
+
           results.add({
-            'x1': ((x - w / 2) * inputSize).round(),
-            'y1': ((y - h / 2) * inputSize).round(),
-            'x2': ((x + w / 2) * inputSize).round(),
-            'y2': ((y + h / 2) * inputSize).round(),
+            'x1': mappedX1.round(),
+            'y1': mappedY1.round(),
+            'x2': mappedX2.round(),
+            'y2': mappedY2.round(),
             'score': score,
           });
         }

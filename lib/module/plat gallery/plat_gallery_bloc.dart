@@ -1,12 +1,14 @@
 // ignore_for_file: depend_on_referenced_packages
 
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:bloc/bloc.dart';
 import 'package:face_recognition/module/plat gallery/plat_gallery_event.dart';
 import 'package:face_recognition/module/plat gallery/plat_gallery_state.dart';
 import 'package:face_recognition/service/ocr_isolate_pool.dart';
 import 'package:face_recognition/service/yolo_isolate_pool.dart';
+import 'package:face_recognition/utils/plate_processing.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as imglib;
@@ -68,7 +70,6 @@ class PlateGalleryBloc extends Bloc<PlateGalleryEvent, PlateGalleryState> {
       );
 
       final result = await yolo.detect(jpg640);
-      debugPrint("📦 YOLO detect result count: ${result.length}");
 
       if (result.isEmpty) {
         emit(
@@ -86,13 +87,12 @@ class PlateGalleryBloc extends Bloc<PlateGalleryEvent, PlateGalleryState> {
       result.sort((a, b) => b.score.compareTo(a.score));
       final best = result.first;
 
-      final rect = Rect.fromLTWH(
+      final rect = Rect.fromLTRB(
         best.x1.toDouble(),
         best.y1.toDouble(),
-        (best.x2 - best.x1).toDouble(),
-        (best.y2 - best.y1).toDouble(),
+        best.x2.toDouble(),
+        best.y2.toDouble(),
       );
-
       emit(
         PlateGalleryState(
           isProcessing: true,
@@ -103,10 +103,11 @@ class PlateGalleryBloc extends Bloc<PlateGalleryEvent, PlateGalleryState> {
         ),
       );
 
-      final cropped = await compute(_cropIsolate, {
-        'jpeg': jpg640,
-        'rect': rect,
-      });
+      final cropped = await cropPlateRegion(
+        jpg640,
+        rect,
+        marginFactor: 0.25,
+      );
 
       if (cropped == null) {
         emit(
@@ -131,20 +132,11 @@ class PlateGalleryBloc extends Bloc<PlateGalleryEvent, PlateGalleryState> {
         ),
       );
 
-      String bestText = "";
-      final sub = ocr.results.listen((t) {
-        if (t.isNotEmpty && t.length > bestText.length) bestText = t;
-      });
-
-      ocr.push(cropped);
-
-      final limit = DateTime.now().add(const Duration(seconds: 5));
-      while (DateTime.now().isBefore(limit)) {
-        await Future.delayed(const Duration(milliseconds: 200));
-      }
-      await sub.cancel();
-
-      final text = bestText.trim();
+      final text = await waitForOcrResult(
+        ocr,
+        cropped,
+        timeout: const Duration(seconds: 5),
+      );
 
       emit(
         PlateGalleryState(
@@ -166,26 +158,6 @@ class PlateGalleryBloc extends Bloc<PlateGalleryEvent, PlateGalleryState> {
           preview: ev.imageBytes,
         ),
       );
-    }
-  }
-
-  static Uint8List? _cropIsolate(Map<String, dynamic> args) {
-    try {
-      final jpeg = args['jpeg'] as Uint8List;
-      final r = args['rect'] as Rect;
-
-      final img = imglib.decodeImage(jpeg);
-      if (img == null) return null;
-
-      final x = r.left.clamp(0, img.width - 1).toInt();
-      final y = r.top.clamp(0, img.height - 1).toInt();
-      final w = (r.width.clamp(1, img.width - x)).toInt();
-      final h = (r.height.clamp(1, img.height - y)).toInt();
-
-      final cropped = imglib.copyCrop(img, x: x, y: y, width: w, height: h);
-      return Uint8List.fromList(imglib.encodeJpg(cropped, quality: 95));
-    } catch (_) {
-      return null;
     }
   }
 }
