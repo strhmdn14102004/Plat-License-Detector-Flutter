@@ -11,6 +11,7 @@ import 'package:face_recognition/service/yolo_isolate_pool.dart';
 import 'package:face_recognition/utils/plate_processing.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image/image.dart' as imglib;
 
 import 'plat_capture_event.dart';
@@ -43,6 +44,14 @@ class PlateCameraCaptureBloc
             Platform.isIOS ? ImageFormatGroup.bgra8888 : ImageFormatGroup.yuv420,
       );
       await controller.initialize();
+
+      if (Platform.isIOS) {
+        try {
+          await controller.lockCaptureOrientation(DeviceOrientation.portraitUp);
+        } catch (e) {
+          debugPrint('⚠️ [Capture] lock orientation failed: $e');
+        }
+      }
 
       emit(
         state.copyWith(

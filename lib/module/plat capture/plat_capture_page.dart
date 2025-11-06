@@ -5,6 +5,7 @@ import 'dart:ui';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:shimmer/shimmer.dart';
 
 import 'plat_capture_bloc.dart';
@@ -182,6 +183,12 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
   }
 
   Future<void> _showResult(BuildContext context, String text) async {
+    final outerContext = context;
+    final normalized = text.trim();
+    final canSave = normalized.isNotEmpty &&
+        normalized.toLowerCase() != 'tidak terbaca' &&
+        normalized.toLowerCase() != 'error';
+
     await showModalBottomSheet(
       context: context,
       backgroundColor: Colors.black.withOpacity(0.95),
@@ -189,10 +196,25 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) {
+        final box = Hive.box('plates');
+        final existing = List<String>.from(box.get('data', defaultValue: []));
+        final alreadySaved = existing.contains(normalized);
+
         return Padding(
           padding: const EdgeInsets.all(20),
           child: Wrap(
             children: [
+              Center(
+                child: Container(
+                  height: 4,
+                  width: 40,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
               const Center(
                 child: Text(
                   'Plat Terbaca',
@@ -202,7 +224,7 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
               const SizedBox(height: 8),
               Center(
                 child: Text(
-                  text,
+                  normalized,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 28,
@@ -212,15 +234,53 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
                 ),
               ),
               const SizedBox(height: 22),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.check),
-                label: const Text('Tutup'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.tealAccent.withOpacity(0.4),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-                onPressed: () => Navigator.pop(ctx),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.save, color: Colors.white),
+                      label: Text(
+                        alreadySaved ? 'Sudah Tersimpan' : 'Simpan',
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: canSave && !alreadySaved
+                            ? Colors.green
+                            : Colors.white12,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      onPressed: (!canSave || alreadySaved)
+                          ? null
+                          : () async {
+                              existing.add(normalized);
+                              await box.put('data', existing);
+                              if (mounted) {
+                                Navigator.pop(ctx);
+                                ScaffoldMessenger.of(outerContext).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Plat $normalized disimpan'),
+                                  ),
+                                );
+                              }
+                            },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.close, color: Colors.white70),
+                      label: const Text(
+                        'Tutup',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Colors.white24, width: 1),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
