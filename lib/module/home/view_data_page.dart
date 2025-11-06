@@ -32,7 +32,7 @@ class _ViewDataPageState extends State<ViewDataPage> {
         centerTitle: true,
 
         title: const Text(
-          "Riwayat Hasil Scan",
+          "History Hasil Scan",
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         leading: IconButton(

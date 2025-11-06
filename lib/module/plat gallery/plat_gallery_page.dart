@@ -122,7 +122,7 @@
             appBar: AppBar(
               backgroundColor: Colors.transparent,
               elevation: 0,
-              title: const Text("Scan Plat dari Gambar"),
+              title: const Text("Mode Galeri Scanner"),
             ),
             body: Stack(
               children: [

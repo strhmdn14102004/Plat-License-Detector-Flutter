@@ -95,7 +95,7 @@ class _PlateScanRealtimePageState extends State<PlateScanRealtimePage>
             backgroundColor: const Color(0xFF0B1220),
             extendBodyBehindAppBar: true,
             appBar: AppBar(
-              title: const Text("Realtime License Plate"),
+              title: const Text("Mode Realtime Scanner"),
               centerTitle: true,
               backgroundColor: Colors.transparent,
               elevation: 0,
