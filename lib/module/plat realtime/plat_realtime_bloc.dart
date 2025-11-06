@@ -29,6 +29,7 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
   int _sensorOrientation = 90;
   CameraLensDirection? _lensDirection;
   Size? _lastFrameSize;
+  Size? _previewSize;
   int _frameRotation = 0;
 
   final int _intervalYolo = 200;
@@ -114,6 +115,7 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
     _lensDirection = controller.description.lensDirection;
     _smoothBox = null;
     _lastFrameSize = null;
+    _previewSize = controller.value.previewSize;
     _frameRotation = _computeRotation(controller.value.deviceOrientation);
 
     if (Platform.isIOS) {
@@ -159,6 +161,7 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
     _smoothBox = null;
     _lensDirection = null;
     _lastFrameSize = null;
+    _previewSize = null;
     _frameRotation = 0;
 
     emit(
@@ -181,6 +184,10 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
     if (_busy) return;
 
     _frameRotation = _computeRotation(ev.controller.value.deviceOrientation);
+    final previewSize = ev.controller.value.previewSize;
+    if (previewSize != null) {
+      _previewSize = previewSize;
+    }
 
     final diff = now.difference(_lastFrame).inMilliseconds;
     if (diff > 0) _fps = 1000 / diff;
@@ -306,7 +313,24 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
     imglib.Image image, {
     int? rotationOverride,
   }) {
-    final rotation = (rotationOverride ?? _sensorOrientation) % 360;
+    int rotation = (rotationOverride ?? _sensorOrientation) % 360;
+
+    if (Platform.isIOS && _previewSize != null) {
+      final bool expectsPortrait =
+          _previewSize!.height >= _previewSize!.width;
+      final bool rawIsPortrait = image.height >= image.width;
+
+      if (expectsPortrait) {
+        if (!rawIsPortrait && rotation % 180 == 0) {
+          rotation = (rotation + 90) % 360;
+        }
+      } else {
+        if (rawIsPortrait && rotation % 180 == 0) {
+          rotation = (rotation + 90) % 360;
+        }
+      }
+    }
+
     imglib.Image rotated = image;
     if (rotation != 0) {
       rotated = imglib.copyRotate(image, angle: rotation);
