@@ -60,12 +60,13 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v1.0
-          name: "Release v1.0 (iOS)"
+          name: "Release v1.1 (iOS)"
           body: |
             🚀 iOS release  
             - Minimum iOS 14  
             - No codesign (manual signing required for App Store upload)
             - Scanner Plat kendaraan bermotor menggunakan yolo dan google mlkit text recognition sebagai ocr
+            - fix bug dengan codex
           files: build/ios/iphoneos/PlatLicenseDetector.ipa
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

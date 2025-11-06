@@ -151,7 +151,7 @@ class PlateCameraCaptureBloc
 
       final cropped = await compute(_cropIsolate, {
         'jpeg': fullJpg,
-        'rect': expanded,
+        'rect': scaledRect,
       });
       if (cropped == null) {
         emit(
