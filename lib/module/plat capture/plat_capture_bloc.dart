@@ -7,6 +7,7 @@ import 'package:bloc/bloc.dart';
 import 'package:camera/camera.dart';
 import 'package:face_recognition/service/ocr_isolate_pool.dart';
 import 'package:face_recognition/service/yolo_isolate_pool.dart';
+import 'package:face_recognition/utils/plate_processing.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as imglib;
@@ -20,17 +21,7 @@ class PlateCameraCaptureBloc
   final OcrIsolatePool ocr;
 
   PlateCameraCaptureBloc({required this.yolo, required this.ocr})
-    : super(
-        PlateCameraCaptureState(
-          isReady: false,
-          isProcessing: false,
-          progress: 0.0,
-          message: "Menyiapkan kamera...",
-          lastText: null,
-          preview: null,
-          controller: null,
-        ),
-      ) {
+    : super(PlateCameraCaptureState.initial()) {
     on<InitializeCamera>(_onInit);
     on<CapturePhoto>(_onCapture);
     on<ResetCamera>(_onReset);
@@ -41,22 +32,23 @@ class PlateCameraCaptureBloc
     Emitter<PlateCameraCaptureState> emit,
   ) async {
     try {
+      await state.controller?.dispose();
+
       final controller = CameraController(
         ev.camera,
         ResolutionPreset.high,
         enableAudio: false,
-        imageFormatGroup: Platform.isIOS
-            ? ImageFormatGroup.bgra8888
-            : ImageFormatGroup.yuv420,
+        imageFormatGroup:
+            Platform.isIOS ? ImageFormatGroup.bgra8888 : ImageFormatGroup.yuv420,
       );
       await controller.initialize();
 
       emit(
-        PlateCameraCaptureState(
+        state.copyWith(
           isReady: true,
           isProcessing: false,
           progress: 0.0,
-          message: "📸 Kamera siap digunakan",
+          message: '📸 Kamera siap digunakan',
           lastText: null,
           preview: null,
           controller: controller,
@@ -64,14 +56,8 @@ class PlateCameraCaptureBloc
       );
     } catch (e) {
       emit(
-        PlateCameraCaptureState(
-          isReady: false,
-          isProcessing: false,
-          progress: 0.0,
-          message: "❌ Gagal inisialisasi kamera: $e",
-          lastText: null,
-          preview: null,
-          controller: null,
+        PlateCameraCaptureState.initial().copyWith(
+          message: '❌ Gagal inisialisasi kamera: $e',
         ),
       );
     }
@@ -85,14 +71,13 @@ class PlateCameraCaptureBloc
     if (controller == null || !controller.value.isInitialized) return;
 
     emit(
-      PlateCameraCaptureState(
+      state.copyWith(
         isReady: true,
         isProcessing: true,
         progress: 0.1,
-        message: "📸 Mengambil foto...",
+        message: '📸 Mengambil foto...',
         lastText: null,
         preview: null,
-        controller: controller,
       ),
     );
 
@@ -112,30 +97,30 @@ class PlateCameraCaptureBloc
       final fullJpg = Uint8List.fromList(imglib.encodeJpg(fixed, quality: 95));
 
       emit(
-        PlateCameraCaptureState(
-          isReady: true,
+        state.copyWith(
           isProcessing: true,
           progress: 0.25,
-          message: "🔍 Mendeteksi plat...",
-          lastText: null,
+          message: '🔍 Mendeteksi plat...',
           preview: fullJpg,
-          controller: controller,
         ),
       );
 
       final detections = await yolo.detect(fullJpg);
-      detections.removeWhere((d) => (d.x2 - d.x1) * (d.y2 - d.y1) < 40000);
+
+      final minArea = fixed.width * fixed.height * 0.0015;
+      detections.removeWhere((d) {
+        final area = (d.x2 - d.x1) * (d.y2 - d.y1);
+        return area < minArea;
+      });
 
       if (detections.isEmpty) {
         emit(
-          PlateCameraCaptureState(
-            isReady: true,
+          state.copyWith(
             isProcessing: false,
             progress: 1.0,
-            message: "❌ Plat tidak ditemukan",
-            lastText: "Tidak terbaca",
+            message: '❌ Plat tidak ditemukan',
+            lastText: 'Tidak terbaca',
             preview: fullJpg,
-            controller: controller,
           ),
         );
         return;
@@ -144,36 +129,23 @@ class PlateCameraCaptureBloc
       detections.sort((a, b) => b.score.compareTo(a.score));
       final best = detections.first;
 
-      final rect = Rect.fromLTWH(
+      final detectionRect = Rect.fromLTRB(
         best.x1.toDouble(),
         best.y1.toDouble(),
-        (best.x2 - best.x1).toDouble(),
-        (best.y2 - best.y1).toDouble(),
+        best.x2.toDouble(),
+        best.y2.toDouble(),
       );
-
-      final margin = 0.25;
-      final mx = rect.width * margin / 2;
-      final my = rect.height * margin / 2;
-      final expanded = Rect.fromLTRB(
-        (rect.left - mx).clamp(0, fixed.width.toDouble()),
-        (rect.top - my).clamp(0, fixed.height.toDouble()),
-        (rect.right + mx).clamp(0, fixed.width.toDouble()),
-        (rect.bottom + my).clamp(0, fixed.height.toDouble()),
-      );
-
-      debugPrint(
-        "📦 YOLO Box: ${expanded.left.toInt()},${expanded.top.toInt()} → ${expanded.right.toInt()},${expanded.bottom.toInt()}",
+      final expanded = expandRectWithinBounds(
+        detectionRect,
+        Size(fixed.width.toDouble(), fixed.height.toDouble()),
+        marginFactor: 0.3,
       );
 
       emit(
-        PlateCameraCaptureState(
-          isReady: true,
-          isProcessing: true,
+        state.copyWith(
           progress: 0.55,
-          message: "✂️ Memotong area plat...",
-          lastText: null,
+          message: '✂️ Memotong area plat...',
           preview: fullJpg,
-          controller: controller,
         ),
       );
 
@@ -183,73 +155,48 @@ class PlateCameraCaptureBloc
       });
       if (cropped == null) {
         emit(
-          PlateCameraCaptureState(
-            isReady: true,
+          state.copyWith(
             isProcessing: false,
             progress: 1.0,
-            message: "❌ Gagal crop gambar",
-            lastText: "Tidak terbaca",
+            message: '❌ Gagal crop gambar',
+            lastText: 'Tidak terbaca',
             preview: fullJpg,
-            controller: controller,
           ),
         );
         return;
       }
 
-      try {
-        File(
-          '/storage/emulated/0/Download/crop_test.jpg',
-        ).writeAsBytesSync(cropped);
-        debugPrint("💾 Crop saved to /Download/crop_test.jpg");
-      } catch (_) {}
-
       emit(
-        PlateCameraCaptureState(
-          isReady: true,
-          isProcessing: true,
+        state.copyWith(
           progress: 0.75,
-          message: "🧠 Memproses OCR...",
-          lastText: null,
+          message: '🧠 Memproses OCR...',
           preview: cropped,
-          controller: controller,
         ),
       );
 
-      String bestText = "";
-      final sub = ocr.results.listen((t) {
-        if (t.isNotEmpty && t.length > bestText.length) bestText = t;
-      });
-      ocr.push(cropped);
-
-      final limit = DateTime.now().add(const Duration(seconds: 5));
-      while (DateTime.now().isBefore(limit)) {
-        await Future.delayed(const Duration(milliseconds: 200));
-      }
-      await sub.cancel();
-
-      final text = bestText.trim();
+      final text = await waitForOcrResult(
+        ocr,
+        cropped,
+        timeout: const Duration(seconds: 5),
+      );
       emit(
-        PlateCameraCaptureState(
-          isReady: true,
+        state.copyWith(
           isProcessing: false,
           progress: 1.0,
-          message: text.isEmpty ? "⚠️ Tidak terbaca" : "✅ Plat: $text",
-          lastText: text.isEmpty ? "Tidak terbaca" : text,
+          message: text.isEmpty ? '⚠️ Tidak terbaca' : '✅ Plat: $text',
+          lastText: text.isEmpty ? 'Tidak terbaca' : text,
           preview: cropped,
-          controller: controller,
         ),
       );
     } catch (e, st) {
       debugPrint("❌ Capture error: $e\n$st");
       emit(
-        PlateCameraCaptureState(
-          isReady: true,
+        state.copyWith(
           isProcessing: false,
           progress: 1.0,
-          message: "❌ Error: $e",
-          lastText: "Error",
+          message: '❌ Error: $e',
+          lastText: 'Error',
           preview: null,
-          controller: state.controller,
         ),
       );
     }
@@ -266,14 +213,8 @@ class PlateCameraCaptureBloc
       } catch (_) {}
     }
     emit(
-      PlateCameraCaptureState(
-        isReady: false,
-        isProcessing: false,
-        progress: 0.0,
-        message: "🔄 Menghidupkan ulang kamera...",
-        lastText: null,
-        preview: null,
-        controller: null,
+      PlateCameraCaptureState.initial().copyWith(
+        message: '🔄 Menghidupkan ulang kamera...',
       ),
     );
     await Future.delayed(const Duration(milliseconds: 300));
@@ -287,10 +228,10 @@ class PlateCameraCaptureBloc
       final img = imglib.decodeImage(jpeg);
       if (img == null) return null;
 
-      final x = r.left.clamp(0, img.width - 1).toInt();
-      final y = r.top.clamp(0, img.height - 1).toInt();
-      final w = (r.width.clamp(1, img.width - x)).toInt();
-      final h = (r.height.clamp(1, img.height - y)).toInt();
+      final x = r.left.clamp(0, (img.width - 1).toDouble()).toInt();
+      final y = r.top.clamp(0, (img.height - 1).toDouble()).toInt();
+      final w = (r.width.clamp(1, (img.width - x).toDouble())).toInt();
+      final h = (r.height.clamp(1, (img.height - y).toDouble())).toInt();
 
       final cropped = imglib.copyCrop(img, x: x, y: y, width: w, height: h);
       return Uint8List.fromList(imglib.encodeJpg(cropped, quality: 95));
