@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:bloc/bloc.dart';
 import 'package:camera/camera.dart';
@@ -8,6 +9,7 @@ import 'package:face_recognition/module/plat realtime/plat_realtime_event.dart';
 import 'package:face_recognition/module/plat realtime/plat_realtime_state.dart';
 import 'package:face_recognition/service/ocr_isolate_pool.dart';
 import 'package:face_recognition/service/yolo_isolate_pool.dart';
+import 'package:face_recognition/utils/plate_processing.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image/image.dart' as imglib;
@@ -24,6 +26,9 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
   DateTime _lastOcr = DateTime.fromMillisecondsSinceEpoch(0);
   Rect? _smoothBox;
   String activeResolution = "high";
+  int _sensorOrientation = 90;
+  CameraLensDirection? _lensDirection;
+  Size? _lastFrameSize;
 
   final int _intervalYolo = 200;
   final int _intervalOcr = 600;
@@ -31,17 +36,7 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
   StreamSubscription<String>? _ocrSub;
 
   PlateRealtimeBloc({required this.yoloPool, required this.ocrPool})
-    : super(
-        PlateRealtimeState(
-          isCameraReady: false,
-          controller: null,
-          isProcessing: false,
-          lastBox: null,
-          lastText: null,
-          detected: [],
-          message: null,
-        ),
-      ) {
+    : super(PlateRealtimeState.initial()) {
     on<StartRealtimeCamera>(_onStartCamera);
     on<StopRealtimeCamera>(_onStopCamera);
     on<RealtimeFrameArrived>(_onFrameArrived);
@@ -51,9 +46,8 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
       final updated = List<String>.from(state.detected);
       if (!updated.contains(text)) updated.add(text);
       emit(
-        PlateRealtimeState(
+        state.copyWith(
           isCameraReady: true,
-          controller: state.controller,
           isProcessing: false,
           lastBox: _smoothBox,
           lastText: text,
@@ -115,6 +109,11 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
 
     await controller.initialize();
 
+    _sensorOrientation = controller.description.sensorOrientation;
+    _lensDirection = controller.description.lensDirection;
+    _smoothBox = null;
+    _lastFrameSize = null;
+
     if (Platform.isIOS) {
       await controller.lockCaptureOrientation(DeviceOrientation.portraitUp);
     }
@@ -128,7 +127,7 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
     });
 
     emit(
-      PlateRealtimeState(
+      state.copyWith(
         isCameraReady: true,
         controller: controller,
         isProcessing: false,
@@ -150,15 +149,18 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
       await state.controller?.dispose();
     } catch (_) {}
 
+    _smoothBox = null;
+    _lensDirection = null;
+    _lastFrameSize = null;
+
     emit(
-      PlateRealtimeState(
+      state.copyWith(
         isCameraReady: false,
         controller: null,
         isProcessing: false,
         lastBox: null,
         lastText: null,
-        detected: state.detected,
-        message: "Kamera berhenti",
+        message: 'Kamera berhenti',
       ),
     );
   }
@@ -185,32 +187,45 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
       final result = await yoloPool.detect(bytes);
       if (result.isEmpty) return;
 
+      final frameSize = _lastFrameSize;
+      if (frameSize != null) {
+        final double minArea =
+            frameSize.width * frameSize.height * 0.0012; // ~0.12%
+        result.removeWhere((d) {
+          final area = (d.x2 - d.x1) * (d.y2 - d.y1);
+          return area < minArea;
+        });
+      }
+
       result.sort((a, b) => b.score.compareTo(a.score));
       final best = result.first;
       if (best.score < 0.4) return;
 
-      final rect = Rect.fromLTWH(
+      final rawRect = Rect.fromLTRB(
         best.x1.toDouble(),
         best.y1.toDouble(),
-        (best.x2 - best.x1).toDouble(),
-        (best.y2 - best.y1).toDouble(),
+        best.x2.toDouble(),
+        best.y2.toDouble(),
       );
-      _smoothBox = _blend(rect, _smoothBox);
+
+      final bounds = frameSize ?? Size.zero;
+      final expanded = bounds.isEmpty
+          ? rawRect
+          : expandRectWithinBounds(rawRect, bounds, marginFactor: 0.2);
+      _smoothBox = _blend(expanded, _smoothBox);
 
       if (now.difference(_lastOcr).inMilliseconds > _intervalOcr) {
         _lastOcr = now;
-        final crop = await _crop(bytes, rect);
+        final crop = await _crop(bytes, rawRect);
         if (crop != null) ocrPool.push(crop);
       }
 
       emit(
-        PlateRealtimeState(
+        state.copyWith(
           isCameraReady: true,
           controller: ev.controller,
           isProcessing: false,
           lastBox: _smoothBox,
-          lastText: state.lastText,
-          detected: state.detected,
           message:
               "⚙️ FPS: ${_fps.toStringAsFixed(1)} | Plat: ${state.lastText ?? '-'}",
         ),
@@ -222,23 +237,87 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
 
   Future<Uint8List?> _toRGB(CameraImage img) async {
     try {
+      imglib.Image image;
       if (Platform.isIOS && img.format.group == ImageFormatGroup.bgra8888) {
-        final p = img.planes.first;
-        final image = imglib.Image.fromBytes(
-          width: img.width,
-          height: img.height,
-          bytes: p.bytes.buffer,
-          order: imglib.ChannelOrder.bgra,
-        );
-        return Uint8List.fromList(imglib.encodeJpg(image, quality: 90));
+        image = _convertBgra(img);
       } else {
-        final i = _yuvToRgb(img);
-        return Uint8List.fromList(imglib.encodeJpg(i, quality: 90));
+        image = _yuvToRgb(img);
       }
+
+      image = _applyOrientation(image);
+      return Uint8List.fromList(imglib.encodeJpg(image, quality: 90));
     } catch (e) {
       debugPrint("⚠️ _toRGB error: $e");
       return null;
     }
+  }
+
+  imglib.Image _convertBgra(CameraImage img) {
+    final plane = img.planes.first;
+    final bytes = plane.bytes;
+    final rowStride = plane.bytesPerRow;
+    final bytesPerPixel = plane.bytesPerPixel ?? 4;
+    final width = img.width;
+    final height = img.height;
+
+    if (rowStride == width * bytesPerPixel) {
+      return imglib.Image.fromBytes(
+        width: width,
+        height: height,
+        bytes: bytes.buffer,
+        numChannels: bytesPerPixel,
+        order: imglib.ChannelOrder.bgra,
+      );
+    }
+
+    final buffer = Uint8List(width * height * bytesPerPixel);
+    final rowBytes = width * bytesPerPixel;
+    for (int y = 0; y < height; y++) {
+      final srcOffset = y * rowStride;
+      final dstOffset = y * rowBytes;
+      final slice = bytes.buffer.asUint8List(srcOffset, rowBytes);
+      buffer.setRange(
+        dstOffset,
+        dstOffset + rowBytes,
+        slice,
+      );
+    }
+
+    return imglib.Image.fromBytes(
+      width: width,
+      height: height,
+      bytes: buffer.buffer,
+      numChannels: bytesPerPixel,
+      order: imglib.ChannelOrder.bgra,
+    );
+  }
+
+  imglib.Image _applyOrientation(imglib.Image image) {
+    final orientation = _sensorOrientation % 360;
+    imglib.Image rotated;
+    switch (orientation) {
+      case 90:
+        rotated = imglib.copyRotate(image, angle: 90);
+        break;
+      case 180:
+        rotated = imglib.copyRotate(image, angle: 180);
+        break;
+      case 270:
+        rotated = imglib.copyRotate(image, angle: 270);
+        break;
+      default:
+        rotated = image;
+        break;
+    }
+
+    if (_lensDirection == CameraLensDirection.front) {
+      rotated = imglib.flipHorizontal(rotated);
+    }
+    _lastFrameSize = Size(
+      rotated.width.toDouble(),
+      rotated.height.toDouble(),
+    );
+    return rotated;
   }
 
   imglib.Image _yuvToRgb(CameraImage img) {
@@ -265,21 +344,23 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
         out.setPixelRgb(x, y, r, g, b);
       }
     }
-    return imglib.copyRotate(out, angle: 90);
+    return out;
   }
 
   Future<Uint8List?> _crop(Uint8List jpeg, Rect rect) async {
     final img = imglib.decodeImage(jpeg);
     if (img == null) return null;
 
-    final scaleX = img.width / 640;
-    final scaleY = img.height / 640;
-    final sx = (scaleX + scaleY) / 2;
+    final expanded = expandRectWithinBounds(
+      rect,
+      Size(img.width.toDouble(), img.height.toDouble()),
+      marginFactor: 0.25,
+    );
 
-    final x = (rect.left * sx).round().clamp(0, img.width - 1);
-    final y = (rect.top * sx).round().clamp(0, img.height - 1);
-    final w = (rect.width * sx).round().clamp(1, img.width - x);
-    final h = (rect.height * sx).round().clamp(1, img.height - y);
+    final int x = expanded.left.round().clamp(0, img.width - 1);
+    final int y = expanded.top.round().clamp(0, img.height - 1);
+    final int w = expanded.width.round().clamp(1, img.width - x);
+    final int h = expanded.height.round().clamp(1, img.height - y);
 
     final cropped = imglib.copyCrop(img, x: x, y: y, width: w, height: h);
     return Uint8List.fromList(imglib.encodeJpg(cropped, quality: 90));

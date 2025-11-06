@@ -7,6 +7,7 @@ import 'package:face_recognition/module/plat gallery/plat_gallery_event.dart';
 import 'package:face_recognition/module/plat gallery/plat_gallery_state.dart';
 import 'package:face_recognition/service/ocr_isolate_pool.dart';
 import 'package:face_recognition/service/yolo_isolate_pool.dart';
+import 'package:face_recognition/utils/plate_processing.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as imglib;
@@ -68,7 +69,6 @@ class PlateGalleryBloc extends Bloc<PlateGalleryEvent, PlateGalleryState> {
       );
 
       final result = await yolo.detect(jpg640);
-      debugPrint("📦 YOLO detect result count: ${result.length}");
 
       if (result.isEmpty) {
         emit(
@@ -86,11 +86,16 @@ class PlateGalleryBloc extends Bloc<PlateGalleryEvent, PlateGalleryState> {
       result.sort((a, b) => b.score.compareTo(a.score));
       final best = result.first;
 
-      final rect = Rect.fromLTWH(
+      final rect = Rect.fromLTRB(
         best.x1.toDouble(),
         best.y1.toDouble(),
-        (best.x2 - best.x1).toDouble(),
-        (best.y2 - best.y1).toDouble(),
+        best.x2.toDouble(),
+        best.y2.toDouble(),
+      );
+      final expanded = expandRectWithinBounds(
+        rect,
+        const Size(kYoloInputSize.toDouble(), kYoloInputSize.toDouble()),
+        marginFactor: 0.25,
       );
 
       emit(
@@ -105,7 +110,7 @@ class PlateGalleryBloc extends Bloc<PlateGalleryEvent, PlateGalleryState> {
 
       final cropped = await compute(_cropIsolate, {
         'jpeg': jpg640,
-        'rect': rect,
+        'rect': expanded,
       });
 
       if (cropped == null) {
@@ -131,20 +136,11 @@ class PlateGalleryBloc extends Bloc<PlateGalleryEvent, PlateGalleryState> {
         ),
       );
 
-      String bestText = "";
-      final sub = ocr.results.listen((t) {
-        if (t.isNotEmpty && t.length > bestText.length) bestText = t;
-      });
-
-      ocr.push(cropped);
-
-      final limit = DateTime.now().add(const Duration(seconds: 5));
-      while (DateTime.now().isBefore(limit)) {
-        await Future.delayed(const Duration(milliseconds: 200));
-      }
-      await sub.cancel();
-
-      final text = bestText.trim();
+      final text = await waitForOcrResult(
+        ocr,
+        cropped,
+        timeout: const Duration(seconds: 5),
+      );
 
       emit(
         PlateGalleryState(
