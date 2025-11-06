@@ -1,17 +1,19 @@
+// ignore_for_file: curly_braces_in_flow_control_structures, depend_on_referenced_packages
+
 import 'dart:async';
 import 'dart:io';
 
 import 'package:bloc/bloc.dart';
 import 'package:camera/camera.dart';
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:image/image.dart' as imglib;
 import 'package:vehicle_identification_number/module/plat realtime/plat_realtime_event.dart';
 import 'package:vehicle_identification_number/module/plat realtime/plat_realtime_state.dart';
 import 'package:vehicle_identification_number/service/ocr_isolate_pool.dart';
 import 'package:vehicle_identification_number/service/yolo_isolate_pool.dart';
 import 'package:vehicle_identification_number/utils/plate_processing.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:image/image.dart' as imglib;
 
 class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
   final YoloIsolatePool yoloPool;
@@ -306,18 +308,17 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
   imglib.Image _applyOrientation(imglib.Image image, {int? rotationOverride}) {
     int rotation = (rotationOverride ?? _sensorOrientation) % 360;
 
-    if (Platform.isIOS && _previewSize != null) {
-      final bool expectsPortrait = _previewSize!.height >= _previewSize!.width;
-      final bool rawIsPortrait = image.height >= image.width;
+    if (Platform.isIOS) {
+      final bool expectsPortrait =
+          _previewSize == null || _previewSize!.height > _previewSize!.width;
 
       if (expectsPortrait) {
-        if (!rawIsPortrait && rotation % 180 == 0) {
-          rotation = (rotation + 90) % 360;
-        }
-      } else {
-        if (rawIsPortrait && rotation % 180 == 0) {
-          rotation = (rotation + 90) % 360;
-        }
+        if (rotation == 90) {
+          rotation = 0;
+        } else if (rotation == 270)
+          rotation = 180;
+        else if (rotation == 0)
+          rotation = 90;
       }
     }
 
@@ -329,6 +330,7 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
     if (_lensDirection == CameraLensDirection.front) {
       rotated = imglib.flipHorizontal(rotated);
     }
+
     _lastFrameSize = Size(rotated.width.toDouble(), rotated.height.toDouble());
     return rotated;
   }

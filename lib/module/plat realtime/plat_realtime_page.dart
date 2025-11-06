@@ -3,12 +3,12 @@
 import 'dart:ui';
 
 import 'package:camera/camera.dart';
-import 'package:vehicle_identification_number/module/plat%20realtime/plat_realtime_bloc.dart';
-import 'package:vehicle_identification_number/module/plat%20realtime/plat_realtime_event.dart';
-import 'package:vehicle_identification_number/module/plat%20realtime/plat_realtime_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:vehicle_identification_number/module/plat%20realtime/plat_realtime_bloc.dart';
+import 'package:vehicle_identification_number/module/plat%20realtime/plat_realtime_event.dart';
+import 'package:vehicle_identification_number/module/plat%20realtime/plat_realtime_state.dart';
 
 class PlateScanRealtimePage extends StatefulWidget {
   const PlateScanRealtimePage({super.key});
