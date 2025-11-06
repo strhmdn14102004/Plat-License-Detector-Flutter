@@ -4,11 +4,11 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:bloc/bloc.dart';
-import 'package:face_recognition/module/plat gallery/plat_gallery_event.dart';
-import 'package:face_recognition/module/plat gallery/plat_gallery_state.dart';
-import 'package:face_recognition/service/ocr_isolate_pool.dart';
-import 'package:face_recognition/service/yolo_isolate_pool.dart';
-import 'package:face_recognition/utils/plate_processing.dart';
+import 'package:vehicle_identification_number/module/plat gallery/plat_gallery_event.dart';
+import 'package:vehicle_identification_number/module/plat gallery/plat_gallery_state.dart';
+import 'package:vehicle_identification_number/service/ocr_isolate_pool.dart';
+import 'package:vehicle_identification_number/service/yolo_isolate_pool.dart';
+import 'package:vehicle_identification_number/utils/plate_processing.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as imglib;

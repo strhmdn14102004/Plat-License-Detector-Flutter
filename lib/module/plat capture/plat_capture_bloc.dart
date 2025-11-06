@@ -1,4 +1,4 @@
-// ignore_for_file: depend_on_referenced_packages
+// ignore_for_file: depend_on_referenced_packages, unnecessary_import
 
 import 'dart:async';
 import 'dart:io';
@@ -6,9 +6,9 @@ import 'dart:typed_data';
 
 import 'package:bloc/bloc.dart';
 import 'package:camera/camera.dart';
-import 'package:face_recognition/service/ocr_isolate_pool.dart';
-import 'package:face_recognition/service/yolo_isolate_pool.dart';
-import 'package:face_recognition/utils/plate_processing.dart';
+import 'package:vehicle_identification_number/service/ocr_isolate_pool.dart';
+import 'package:vehicle_identification_number/service/yolo_isolate_pool.dart';
+import 'package:vehicle_identification_number/utils/plate_processing.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';

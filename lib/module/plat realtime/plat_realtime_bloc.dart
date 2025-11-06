@@ -1,15 +1,14 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:bloc/bloc.dart';
 import 'package:camera/camera.dart';
 import 'package:device_info_plus/device_info_plus.dart';
-import 'package:face_recognition/module/plat realtime/plat_realtime_event.dart';
-import 'package:face_recognition/module/plat realtime/plat_realtime_state.dart';
-import 'package:face_recognition/service/ocr_isolate_pool.dart';
-import 'package:face_recognition/service/yolo_isolate_pool.dart';
-import 'package:face_recognition/utils/plate_processing.dart';
+import 'package:vehicle_identification_number/module/plat realtime/plat_realtime_event.dart';
+import 'package:vehicle_identification_number/module/plat realtime/plat_realtime_state.dart';
+import 'package:vehicle_identification_number/service/ocr_isolate_pool.dart';
+import 'package:vehicle_identification_number/service/yolo_isolate_pool.dart';
+import 'package:vehicle_identification_number/utils/plate_processing.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image/image.dart' as imglib;
@@ -206,8 +205,7 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
 
       final frameSize = _lastFrameSize;
       if (frameSize != null) {
-        final double minArea =
-            frameSize.width * frameSize.height * 0.0012; // ~0.12%
+        final double minArea = frameSize.width * frameSize.height * 0.0012;
         result.removeWhere((d) {
           final area = (d.x2 - d.x1) * (d.y2 - d.y1);
           return area < minArea;
@@ -293,11 +291,7 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
       final srcOffset = y * rowStride;
       final dstOffset = y * rowBytes;
       final slice = bytes.buffer.asUint8List(srcOffset, rowBytes);
-      buffer.setRange(
-        dstOffset,
-        dstOffset + rowBytes,
-        slice,
-      );
+      buffer.setRange(dstOffset, dstOffset + rowBytes, slice);
     }
 
     return imglib.Image.fromBytes(
@@ -309,15 +303,11 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
     );
   }
 
-  imglib.Image _applyOrientation(
-    imglib.Image image, {
-    int? rotationOverride,
-  }) {
+  imglib.Image _applyOrientation(imglib.Image image, {int? rotationOverride}) {
     int rotation = (rotationOverride ?? _sensorOrientation) % 360;
 
     if (Platform.isIOS && _previewSize != null) {
-      final bool expectsPortrait =
-          _previewSize!.height >= _previewSize!.width;
+      final bool expectsPortrait = _previewSize!.height >= _previewSize!.width;
       final bool rawIsPortrait = image.height >= image.width;
 
       if (expectsPortrait) {
@@ -339,10 +329,7 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
     if (_lensDirection == CameraLensDirection.front) {
       rotated = imglib.flipHorizontal(rotated);
     }
-    _lastFrameSize = Size(
-      rotated.width.toDouble(),
-      rotated.height.toDouble(),
-    );
+    _lastFrameSize = Size(rotated.width.toDouble(), rotated.height.toDouble());
     return rotated;
   }
 
@@ -374,12 +361,7 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
   }
 
   Future<Uint8List?> _crop(Uint8List jpeg, Rect rect) async {
-    return cropPlateRegionSync(
-      jpeg,
-      rect,
-      marginFactor: 0.25,
-      quality: 90,
-    );
+    return cropPlateRegionSync(jpeg, rect, marginFactor: 0.25, quality: 90);
   }
 
   Rect _blend(Rect n, Rect? p, {double a = 0.3}) {

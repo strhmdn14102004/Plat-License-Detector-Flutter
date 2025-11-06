@@ -1,3 +1,5 @@
+// ignore_for_file: unnecessary_const
+
 import 'dart:ui';
 
 import 'package:camera/camera.dart';
@@ -23,14 +25,14 @@ class PlateRealtimeState {
   });
 
   factory PlateRealtimeState.initial() => const PlateRealtimeState(
-        isCameraReady: false,
-        controller: null,
-        isProcessing: false,
-        lastBox: null,
-        lastText: null,
-        detected: [],
-        message: null,
-      );
+    isCameraReady: false,
+    controller: null,
+    isProcessing: false,
+    lastBox: null,
+    lastText: null,
+    detected: [],
+    message: null,
+  );
 
   PlateRealtimeState copyWith({
     bool? isCameraReady,

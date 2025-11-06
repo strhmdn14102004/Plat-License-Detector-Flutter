@@ -3,10 +3,10 @@
 import 'dart:io';
 import 'dart:ui';
 
-import 'package:face_recognition/module/home/view_data_page.dart';
-import 'package:face_recognition/module/plat%20capture/plat_capture_page.dart';
-import 'package:face_recognition/module/plat%20gallery/plat_gallery_page.dart';
-import 'package:face_recognition/module/plat%20realtime/plat_realtime_page.dart';
+import 'package:vehicle_identification_number/module/home/view_data_page.dart';
+import 'package:vehicle_identification_number/module/plat%20capture/plat_capture_page.dart';
+import 'package:vehicle_identification_number/module/plat%20gallery/plat_gallery_page.dart';
+import 'package:vehicle_identification_number/module/plat%20realtime/plat_realtime_page.dart';
 import 'package:flutter/material.dart';
 
 class HomePage extends StatefulWidget {

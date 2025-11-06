@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:isolate';
 import 'dart:math' as math;
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as imglib;
@@ -146,7 +145,10 @@ class YoloIsolatePool {
         final int offsetX = ((inputSize - resizedWidth) / 2).round();
         final int offsetY = ((inputSize - resizedHeight) / 2).round();
 
-        final imglib.Image letterbox = imglib.Image(width: inputSize, height: inputSize);
+        final imglib.Image letterbox = imglib.Image(
+          width: inputSize,
+          height: inputSize,
+        );
         final imglib.Image resized = imglib.copyResize(
           img,
           width: resizedWidth,
@@ -206,14 +208,22 @@ class YoloIsolatePool {
           final double rawX2 = (x + w / 2) * inputSize;
           final double rawY2 = (y + h / 2) * inputSize;
 
-          final double mappedX1 = ((rawX1 - padX) * invScale)
-              .clamp(0, originalWidth.toDouble());
-          final double mappedY1 = ((rawY1 - padY) * invScale)
-              .clamp(0, originalHeight.toDouble());
-          final double mappedX2 = ((rawX2 - padX) * invScale)
-              .clamp(0, originalWidth.toDouble());
-          final double mappedY2 = ((rawY2 - padY) * invScale)
-              .clamp(0, originalHeight.toDouble());
+          final double mappedX1 = ((rawX1 - padX) * invScale).clamp(
+            0,
+            originalWidth.toDouble(),
+          );
+          final double mappedY1 = ((rawY1 - padY) * invScale).clamp(
+            0,
+            originalHeight.toDouble(),
+          );
+          final double mappedX2 = ((rawX2 - padX) * invScale).clamp(
+            0,
+            originalWidth.toDouble(),
+          );
+          final double mappedY2 = ((rawY2 - padY) * invScale).clamp(
+            0,
+            originalHeight.toDouble(),
+          );
 
           if (mappedX2 <= mappedX1 || mappedY2 <= mappedY1) continue;
 

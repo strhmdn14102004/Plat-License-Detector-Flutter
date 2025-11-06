@@ -1,9 +1,8 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:typed_data';
 import 'dart:ui';
 
-import 'package:face_recognition/service/ocr_isolate_pool.dart';
+import 'package:vehicle_identification_number/service/ocr_isolate_pool.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as imglib;
 
@@ -54,7 +53,7 @@ Future<String> waitForOcrResult(
 
   await completer.future;
   await subscription.cancel();
-  timer?.cancel();
+  timer.cancel();
 
   return bestText.trim();
 }
@@ -65,20 +64,17 @@ Future<Uint8List?> cropPlateRegion(
   double marginFactor = 0.2,
   int quality = 95,
 }) async {
-  return compute(
-    _cropPlateRegion,
-    {
-      'jpeg': jpeg,
-      'rect': Float64List.fromList([
-        rect.left,
-        rect.top,
-        rect.right,
-        rect.bottom,
-      ]),
-      'margin': marginFactor,
-      'quality': quality,
-    },
-  );
+  return compute(_cropPlateRegion, {
+    'jpeg': jpeg,
+    'rect': Float64List.fromList([
+      rect.left,
+      rect.top,
+      rect.right,
+      rect.bottom,
+    ]),
+    'margin': marginFactor,
+    'quality': quality,
+  });
 }
 
 Uint8List? cropPlateRegionSync(
@@ -110,12 +106,7 @@ Uint8List? _cropPlateRegion(Map<String, dynamic> args) {
     final imglib.Image? img = imglib.decodeImage(jpeg);
     if (img == null) return null;
 
-    final Rect rawRect = Rect.fromLTRB(
-      data[0],
-      data[1],
-      data[2],
-      data[3],
-    );
+    final Rect rawRect = Rect.fromLTRB(data[0], data[1], data[2], data[3]);
 
     final Rect scaledRect = expandRectWithinBounds(
       rawRect,

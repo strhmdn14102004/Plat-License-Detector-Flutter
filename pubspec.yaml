@@ -1,5 +1,5 @@
-name: face_recognition
-description: "A new Flutter project."
+name: vehicle_identification_number
+description: "Project Flutter application for Vehicle Identification Number (VIN) detection using camera and ML models."
 publish_to: "none"
 version: 1.0.0
 
