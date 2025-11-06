@@ -39,6 +39,7 @@ class OcrIsolatePool {
 
       if (isRealtime) {
         img = imglib.adjustColor(img, brightness: 0.05, contrast: 1.15);
+        img = imglib.gaussianBlur(img, radius: 1);
       }
 
       final tmp = await getTemporaryDirectory();
@@ -55,8 +56,6 @@ class OcrIsolatePool {
       final lines = <String>[];
       for (final block in result.blocks) {
         for (final line in block.lines) {
-          final conf = line.confidence ?? 0.0;
-          if (conf < 0.4) continue;
           final txt = line.text.trim().toUpperCase();
           if (txt.isNotEmpty) lines.add(txt);
         }
@@ -99,6 +98,16 @@ class OcrIsolatePool {
             .replaceAll('S', '5')
             .replaceAll('B', '8')
             .replaceAll('G', '6');
+
+        mid = mid.replaceAllMapped(RegExp(r'8'), (m) {
+          final i = m.start;
+          if (i > 0 && i < mid.length - 1) {
+            final before = mid[i - 1];
+            final after = mid[i + 1];
+            if ('906'.contains(before) || '906'.contains(after)) return '8';
+          }
+          return '3';
+        });
 
         suffix = suffix
             .replaceAll('0', 'O')
@@ -176,7 +185,8 @@ class OcrIsolatePool {
         'CD',
       ];
 
-      final plateRegex = RegExp(r'^[A-Z]{1,3}\s?\d{1,5}\s?[A-Z]{0,4}$');
+      final plateRegex =
+          RegExp(r'^[A-Z]{1,3}[\s\-]?\d{1,5}[\s\-]?[A-Z]{0,4}$');
       final plateWithTimeRegex = RegExp(
         r'^([A-Z]{1,3}\s?\d{1,5}\s?[A-Z]{0,4})[\s\n]+(\d{2}[:.,-]?\d{2})$',
       );
