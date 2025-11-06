@@ -99,16 +99,6 @@ class OcrIsolatePool {
             .replaceAll('B', '8')
             .replaceAll('G', '6');
 
-        // mid = mid.replaceAllMapped(RegExp(r'8'), (m) {
-        //   final i = m.start;
-        //   if (i > 0 && i < mid.length - 1) {
-        //     final before = mid[i - 1];
-        //     final after = mid[i + 1];
-        //     if ('906'.contains(before) || '906'.contains(after)) return '8';
-        //   }
-        //   return '3';
-        // });
-
         suffix = suffix
             .replaceAll('0', 'O')
             .replaceAll('Ø', 'O')

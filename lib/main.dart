@@ -1,3 +1,7 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:vehicle_identification_number/module/home/home_page.dart';
 import 'package:vehicle_identification_number/module/plat%20capture/plat_capture_bloc.dart';
 import 'package:vehicle_identification_number/module/plat%20gallery/plat_gallery_bloc.dart';
@@ -5,10 +9,6 @@ import 'package:vehicle_identification_number/module/plat%20gallery/plat_gallery
 import 'package:vehicle_identification_number/module/plat%20realtime/plat_realtime_bloc.dart';
 import 'package:vehicle_identification_number/service/ocr_isolate_pool.dart';
 import 'package:vehicle_identification_number/service/yolo_isolate_pool.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

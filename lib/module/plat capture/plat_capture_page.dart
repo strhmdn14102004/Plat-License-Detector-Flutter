@@ -1,4 +1,4 @@
-// ignore_for_file: deprecated_member_use, use_build_context_synchronously
+// ignore_for_file: use_build_context_synchronously, deprecated_member_use
 
 import 'dart:ui';
 
@@ -185,7 +185,8 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
   Future<void> _showResult(BuildContext context, String text) async {
     final outerContext = context;
     final normalized = text.trim();
-    final canSave = normalized.isNotEmpty &&
+    final canSave =
+        normalized.isNotEmpty &&
         normalized.toLowerCase() != 'tidak terbaca' &&
         normalized.toLowerCase() != 'error';
 

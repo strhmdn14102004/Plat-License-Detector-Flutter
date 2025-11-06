@@ -1,18 +1,17 @@
-// ignore_for_file: depend_on_referenced_packages, unnecessary_import
+// ignore_for_file: depend_on_referenced_packages
 
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:bloc/bloc.dart';
 import 'package:camera/camera.dart';
-import 'package:vehicle_identification_number/service/ocr_isolate_pool.dart';
-import 'package:vehicle_identification_number/service/yolo_isolate_pool.dart';
-import 'package:vehicle_identification_number/utils/plate_processing.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image/image.dart' as imglib;
+import 'package:vehicle_identification_number/service/ocr_isolate_pool.dart';
+import 'package:vehicle_identification_number/service/yolo_isolate_pool.dart';
+import 'package:vehicle_identification_number/utils/plate_processing.dart';
 
 import 'plat_capture_event.dart';
 import 'plat_capture_state.dart';
@@ -40,8 +39,9 @@ class PlateCameraCaptureBloc
         ev.camera,
         ResolutionPreset.high,
         enableAudio: false,
-        imageFormatGroup:
-            Platform.isIOS ? ImageFormatGroup.bgra8888 : ImageFormatGroup.yuv420,
+        imageFormatGroup: Platform.isIOS
+            ? ImageFormatGroup.bgra8888
+            : ImageFormatGroup.yuv420,
       );
       await controller.initialize();
 

@@ -1,3 +1,5 @@
+// ignore_for_file: unnecessary_const
+
 import 'dart:typed_data';
 
 import 'package:camera/camera.dart';
@@ -23,14 +25,14 @@ class PlateCameraCaptureState {
   });
 
   factory PlateCameraCaptureState.initial() => const PlateCameraCaptureState(
-        isReady: false,
-        isProcessing: false,
-        progress: 0.0,
-        message: 'Menyiapkan kamera...',
-        lastText: null,
-        preview: null,
-        controller: null,
-      );
+    isReady: false,
+    isProcessing: false,
+    progress: 0.0,
+    message: 'Menyiapkan kamera...',
+    lastText: null,
+    preview: null,
+    controller: null,
+  );
 
   PlateCameraCaptureState copyWith({
     bool? isReady,

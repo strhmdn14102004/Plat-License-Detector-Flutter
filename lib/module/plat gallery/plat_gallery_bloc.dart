@@ -1,17 +1,16 @@
 // ignore_for_file: depend_on_referenced_packages
 
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:bloc/bloc.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:image/image.dart' as imglib;
 import 'package:vehicle_identification_number/module/plat gallery/plat_gallery_event.dart';
 import 'package:vehicle_identification_number/module/plat gallery/plat_gallery_state.dart';
 import 'package:vehicle_identification_number/service/ocr_isolate_pool.dart';
 import 'package:vehicle_identification_number/service/yolo_isolate_pool.dart';
 import 'package:vehicle_identification_number/utils/plate_processing.dart';
-import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
-import 'package:image/image.dart' as imglib;
 
 class PlateGalleryBloc extends Bloc<PlateGalleryEvent, PlateGalleryState> {
   final YoloIsolatePool yolo;
@@ -103,11 +102,7 @@ class PlateGalleryBloc extends Bloc<PlateGalleryEvent, PlateGalleryState> {
         ),
       );
 
-      final cropped = await cropPlateRegion(
-        jpg640,
-        rect,
-        marginFactor: 0.25,
-      );
+      final cropped = await cropPlateRegion(jpg640, rect, marginFactor: 0.25);
 
       if (cropped == null) {
         emit(

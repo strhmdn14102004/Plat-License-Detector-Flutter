@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui';
 
-import 'package:vehicle_identification_number/service/ocr_isolate_pool.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as imglib;
+import 'package:vehicle_identification_number/service/ocr_isolate_pool.dart';
 
 const int kYoloInputSize = 640;
 
