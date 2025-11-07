@@ -66,6 +66,7 @@ class _PlateCameraCaptureZoomPageState extends State<PlateCameraCaptureZoomPage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    context.read<PlateCameraCaptureZoomBloc>().add(DisposeCamera());
     _animCtl.dispose();
     super.dispose();
   }

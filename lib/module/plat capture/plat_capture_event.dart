@@ -13,3 +13,5 @@ class ResetCamera extends PlateCameraCaptureEvent {
   final CameraDescription camera;
   ResetCamera(this.camera);
 }
+
+class DisposeCamera extends PlateCameraCaptureEvent {}

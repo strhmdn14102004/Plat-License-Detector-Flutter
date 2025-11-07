@@ -25,6 +25,7 @@ class PlateCameraCaptureZoomBloc
     on<CapturePhoto>(_onCapture);
     on<ResetCamera>(_onReset);
     on<ZoomCamera>(_onZoom);
+    on<DisposeCamera>(_onDispose);
   }
 
   Future<void> _onInit(
@@ -242,6 +243,33 @@ class PlateCameraCaptureZoomBloc
     );
     await Future.delayed(const Duration(milliseconds: 300));
     add(InitializeCamera(ev.camera));
+  }
+
+  Future<void> _onDispose(
+    DisposeCamera ev,
+    Emitter<PlateCameraCaptureZoomState> emit,
+  ) async {
+    final controller = state.controller;
+    if (controller != null) {
+      try {
+        if (controller.value.isStreamingImages) {
+          await controller.stopImageStream();
+        }
+      } catch (_) {}
+      try {
+        await controller.dispose();
+      } catch (_) {}
+    }
+
+    emit(
+      PlateCameraCaptureZoomState.initial().copyWith(
+        message: 'Kamera dihentikan',
+        controller: null,
+        lastText: null,
+        preview: null,
+        currentZoom: 1.0,
+      ),
+    );
   }
 }
 
