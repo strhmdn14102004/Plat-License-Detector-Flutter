@@ -1,5 +1,3 @@
-// ignore_for_file: depend_on_referenced_packages
-
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
@@ -251,15 +249,23 @@ imglib.Image _applyDigitalZoom(imglib.Image image, double zoomLevel) {
   final effectiveZoom = zoomLevel.clamp(1.0, 6.0);
   if (effectiveZoom <= 1.01) return image;
 
-  final int cropWidth =
-      (image.width / effectiveZoom).round().clamp(1, image.width);
-  final int cropHeight =
-      (image.height / effectiveZoom).round().clamp(1, image.height);
+  final int cropWidth = (image.width / effectiveZoom).round().clamp(
+    1,
+    image.width,
+  );
+  final int cropHeight = (image.height / effectiveZoom).round().clamp(
+    1,
+    image.height,
+  );
 
-  final int left =
-      ((image.width - cropWidth) / 2).round().clamp(0, image.width - 1);
-  final int top =
-      ((image.height - cropHeight) / 2).round().clamp(0, image.height - 1);
+  final int left = ((image.width - cropWidth) / 2).round().clamp(
+    0,
+    image.width - 1,
+  );
+  final int top = ((image.height - cropHeight) / 2).round().clamp(
+    0,
+    image.height - 1,
+  );
 
   final int remainingWidth = image.width - left;
   final int remainingHeight = image.height - top;
