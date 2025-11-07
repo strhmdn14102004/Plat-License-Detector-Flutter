@@ -26,6 +26,7 @@ class PlateCameraCaptureBloc
     on<InitializeCamera>(_onInit);
     on<CapturePhoto>(_onCapture);
     on<ResetCamera>(_onReset);
+    on<DisposeCamera>(_onDispose);
   }
 
   Future<void> _onInit(
@@ -224,5 +225,31 @@ class PlateCameraCaptureBloc
     );
     await Future.delayed(const Duration(milliseconds: 300));
     add(InitializeCamera(ev.camera));
+  }
+
+  Future<void> _onDispose(
+    DisposeCamera ev,
+    Emitter<PlateCameraCaptureState> emit,
+  ) async {
+    final controller = state.controller;
+    if (controller != null) {
+      try {
+        if (controller.value.isStreamingImages) {
+          await controller.stopImageStream();
+        }
+      } catch (_) {}
+      try {
+        await controller.dispose();
+      } catch (_) {}
+    }
+
+    emit(
+      PlateCameraCaptureState.initial().copyWith(
+        message: 'Kamera dihentikan',
+        controller: null,
+        lastText: null,
+        preview: null,
+      ),
+    );
   }
 }

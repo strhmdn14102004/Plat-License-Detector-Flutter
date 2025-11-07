@@ -18,3 +18,5 @@ class ZoomCamera extends PlateCameraCaptureZoomEvent {
   final double level;
   ZoomCamera(this.level);
 }
+
+class DisposeCamera extends PlateCameraCaptureZoomEvent {}

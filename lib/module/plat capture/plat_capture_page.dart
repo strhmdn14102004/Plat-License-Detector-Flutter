@@ -45,6 +45,7 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
 
   @override
   void dispose() {
+    context.read<PlateCameraCaptureBloc>().add(DisposeCamera());
     _animCtl.dispose();
     super.dispose();
   }
