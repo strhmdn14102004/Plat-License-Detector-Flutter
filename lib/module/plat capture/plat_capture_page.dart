@@ -138,7 +138,7 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
                   right: 0,
                   child: Center(
                     child: Text(
-                      "mohon tunggu kamera sedang dimuat, jika lebih dari 5 detik silahkan tutup dan buka kembali page capture ini",
+                      state.message!,
                       style: const TextStyle(
                         color: Colors.white70,
                         fontSize: 15,

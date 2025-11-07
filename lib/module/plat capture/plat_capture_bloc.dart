@@ -68,7 +68,7 @@ class PlateCameraCaptureBloc
     } catch (e) {
       emit(
         PlateCameraCaptureState.initial().copyWith(
-          message: '❌ Gagal inisialisasi kamera: $e',
+          message: 'Tunggu beberapa saat, jika masih tidak bisa kembali ke page sebelumnya dan buka kembali page capture ini',
         ),
       );
     }
