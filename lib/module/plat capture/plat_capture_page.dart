@@ -70,6 +70,7 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
           appBar: AppBar(
             backgroundColor: Colors.transparent,
             title: const Text("Mode Kamera Scanner"),
+            centerTitle: true,
           ),
           body: SafeArea(
             child: Stack(
@@ -134,7 +135,7 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
             
                 if (state.message != null)
                   Positioned(
-                    bottom: 70,
+                    bottom: 60,
                     left: 0,
                     right: 0,
                     child: Center(
@@ -149,7 +150,7 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
                   ),
             
                 Positioned(
-                  bottom: 25,
+                  bottom: 5,
                   left: 0,
                   right: 0,
                   child: Center(

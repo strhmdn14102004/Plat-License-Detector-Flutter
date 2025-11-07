@@ -62,7 +62,7 @@ class PlateGalleryBloc extends Bloc<PlateGalleryEvent, PlateGalleryState> {
         PlateGalleryState(
           isProcessing: true,
           progress: 0.25,
-          message: "🔍 Mendeteksi plat...",
+          message: "🔍 Mendeteksi plat kendaraan...",
           lastText: null,
           preview: jpg640,
         ),
@@ -96,7 +96,7 @@ class PlateGalleryBloc extends Bloc<PlateGalleryEvent, PlateGalleryState> {
         PlateGalleryState(
           isProcessing: true,
           progress: 0.5,
-          message: "✂️ Memotong area plat...",
+          message: "✂️ Memotong area plat kendaraan...",
           lastText: null,
           preview: jpg640,
         ),
@@ -121,7 +121,7 @@ class PlateGalleryBloc extends Bloc<PlateGalleryEvent, PlateGalleryState> {
         PlateGalleryState(
           isProcessing: true,
           progress: 0.7,
-          message: "🧠 Memproses OCR...",
+          message: "🧠 Memproses...",
           lastText: null,
           preview: cropped,
         ),
@@ -137,7 +137,7 @@ class PlateGalleryBloc extends Bloc<PlateGalleryEvent, PlateGalleryState> {
         PlateGalleryState(
           isProcessing: false,
           progress: 1.0,
-          message: text.isEmpty ? "⚠️ Tidak terbaca" : "✅ Plat: $text",
+          message: text.isEmpty ? "⚠️Plat Tidak terbaca, coba ubah angle\natau cari pencahayaan yang baik" : "✅ Plat: $text",
           lastText: text.isEmpty ? "Tidak terbaca" : text,
           preview: cropped,
         ),

@@ -123,6 +123,7 @@ class _PlateGalleryPageState extends State<PlateGalleryPage>
             backgroundColor: Colors.transparent,
             elevation: 0,
             title: const Text("Mode Galeri Scanner"),
+            centerTitle: true,
           ),
           body: SafeArea(
             child: Stack(
@@ -142,7 +143,7 @@ class _PlateGalleryPageState extends State<PlateGalleryPage>
                               fit: BoxFit.contain,
                               gaplessPlayback: true,
                             ),
-            
+
                             if (state.isProcessing)
                               AnimatedBuilder(
                                 animation: _animCtl,
@@ -155,7 +156,9 @@ class _PlateGalleryPageState extends State<PlateGalleryPage>
                                     baseColor: Colors.tealAccent.withOpacity(
                                       0.25,
                                     ),
-                                    highlightColor: Colors.white.withOpacity(0.1),
+                                    highlightColor: Colors.white.withOpacity(
+                                      0.1,
+                                    ),
                                     child: Container(
                                       color: Colors.black.withOpacity(0.25),
                                     ),
@@ -175,7 +178,7 @@ class _PlateGalleryPageState extends State<PlateGalleryPage>
                       style: TextStyle(color: Colors.white70, fontSize: 15),
                     ),
                   ),
-            
+
                 if (state.isProcessing)
                   Positioned(
                     bottom: 110,
@@ -189,10 +192,10 @@ class _PlateGalleryPageState extends State<PlateGalleryPage>
                       backgroundColor: Colors.white10,
                     ),
                   ),
-            
+
                 if (state.message != null)
                   Positioned(
-                    bottom: 70,
+                    bottom: 65,
                     left: 0,
                     right: 0,
                     child: Center(
@@ -205,9 +208,9 @@ class _PlateGalleryPageState extends State<PlateGalleryPage>
                       ),
                     ),
                   ),
-            
+
                 Positioned(
-                  bottom: 25,
+                  bottom: 10,
                   left: 0,
                   right: 0,
                   child: Center(
@@ -283,8 +286,11 @@ class _PlateGalleryPageState extends State<PlateGalleryPage>
                 children: [
                   Expanded(
                     child: ElevatedButton.icon(
-                      icon: const Icon(Icons.save),
-                      label: const Text('Simpan'),
+                      icon: const Icon(Icons.save, color: Colors.white),
+                      label: const Text(
+                        'Simpan',
+                        style: TextStyle(color: Colors.white),
+                      ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green,
                         padding: const EdgeInsets.symmetric(vertical: 14),

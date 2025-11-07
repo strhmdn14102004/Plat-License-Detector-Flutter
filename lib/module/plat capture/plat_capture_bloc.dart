@@ -111,7 +111,7 @@ class PlateCameraCaptureBloc
         state.copyWith(
           isProcessing: true,
           progress: 0.25,
-          message: '🔍 Mendeteksi plat...',
+          message: '🔍 Mendeteksi plat kendaraan...',
           preview: fullJpg,
         ),
       );
@@ -149,7 +149,7 @@ class PlateCameraCaptureBloc
       emit(
         state.copyWith(
           progress: 0.55,
-          message: '✂️ Memotong area plat...',
+          message: '✂️ Memotong area plat kendaraan...',
           preview: fullJpg,
         ),
       );
@@ -175,7 +175,7 @@ class PlateCameraCaptureBloc
       emit(
         state.copyWith(
           progress: 0.75,
-          message: '🧠 Memproses OCR...',
+          message: '🧠 Memproses...',
           preview: cropped,
         ),
       );
@@ -189,7 +189,7 @@ class PlateCameraCaptureBloc
         state.copyWith(
           isProcessing: false,
           progress: 1.0,
-          message: text.isEmpty ? '⚠️ Tidak terbaca' : '✅ Plat: $text',
+          message: text.isEmpty ? '⚠️Plat Tidak terbaca, coba ubah angle\natau cari pencahayaan yang baik' : '✅ Plat: $text',
           lastText: text.isEmpty ? 'Tidak terbaca' : text,
           preview: cropped,
         ),

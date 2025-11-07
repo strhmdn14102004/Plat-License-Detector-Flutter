@@ -121,7 +121,7 @@ class _PlateScanRealtimePageState extends State<PlateScanRealtimePage>
                     const _IdleLayer(),
                   const _FocusOverlay(),
                   Positioned(
-                    top: kToolbarHeight + 40,
+                    top: 10,
                     left: 20,
                     right: 20,
                     child: _HudStatus(
@@ -130,13 +130,13 @@ class _PlateScanRealtimePageState extends State<PlateScanRealtimePage>
                     ),
                   ),
                   const Positioned(
-                    bottom: 120,
+                    bottom: 70,
                     left: 16,
                     right: 16,
                     child: _GpuHint(),
                   ),
                   Positioned(
-                    bottom: 40,
+                    bottom: 5,
                     left: 0,
                     right: 0,
                     child: Center(

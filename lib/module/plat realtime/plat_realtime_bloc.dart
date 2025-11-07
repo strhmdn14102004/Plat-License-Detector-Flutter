@@ -144,7 +144,7 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
         lastBox: null,
         lastText: null,
         detected: [],
-        message: "📸 Kamera aktif (${resolution.name})",
+        message: "📸 Kamera aktif dengan resolusi (${resolution.name})",
       ),
     );
   }
