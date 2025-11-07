@@ -207,7 +207,7 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
 
       final frameSize = _lastFrameSize;
       if (frameSize != null) {
-        final double minArea = frameSize.width * frameSize.height * 0.0012;
+        final double minArea = frameSize.width * frameSize.height * 0.0007;
         result.removeWhere((d) {
           final area = (d.x2 - d.x1) * (d.y2 - d.y1);
           return area < minArea;
