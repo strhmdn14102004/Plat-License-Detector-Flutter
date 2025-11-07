@@ -96,188 +96,190 @@ class _PlateCameraCaptureZoomPageState extends State<PlateCameraCaptureZoomPage>
             backgroundColor: Colors.transparent,
             title: const Text("Mode Kamera Scanner"),
           ),
-          body: Stack(
-            children: [
-              if (preview != null)
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 400),
-                  child: Center(
-                    key: ValueKey(preview),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          Image.memory(
-                            preview,
-                            fit: BoxFit.contain,
-                            gaplessPlayback: true,
-                          ),
-                          if (state.isProcessing)
-                            AnimatedBuilder(
-                              animation: _animCtl..forward(),
-                              builder: (_, _) => BackdropFilter(
-                                filter: ImageFilter.blur(
-                                  sigmaX: 10 * _animCtl.value,
-                                  sigmaY: 10 * _animCtl.value,
-                                ),
-                                child: Shimmer.fromColors(
-                                  baseColor: Colors.tealAccent.withOpacity(
-                                    0.25,
+          body: SafeArea(
+            child: Stack(
+              children: [
+                if (preview != null)
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 400),
+                    child: Center(
+                      key: ValueKey(preview),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            Image.memory(
+                              preview,
+                              fit: BoxFit.contain,
+                              gaplessPlayback: true,
+                            ),
+                            if (state.isProcessing)
+                              AnimatedBuilder(
+                                animation: _animCtl..forward(),
+                                builder: (_, _) => BackdropFilter(
+                                  filter: ImageFilter.blur(
+                                    sigmaX: 10 * _animCtl.value,
+                                    sigmaY: 10 * _animCtl.value,
                                   ),
-                                  highlightColor: Colors.white.withOpacity(0.1),
-                                  child: Container(
-                                    color: Colors.black.withOpacity(0.25),
+                                  child: Shimmer.fromColors(
+                                    baseColor: Colors.tealAccent.withOpacity(
+                                      0.25,
+                                    ),
+                                    highlightColor: Colors.white.withOpacity(0.1),
+                                    child: Container(
+                                      color: Colors.black.withOpacity(0.25),
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                )
-              else if (controller != null && controller.value.isInitialized)
-                GestureDetector(
-                  onScaleStart: (details) => _baseZoom = currentZoom,
-                  onScaleUpdate: (details) {
-                    if (details.scale != 1.0) {
-                      final newZoom = (_baseZoom * details.scale).clamp(
-                        _minZoom,
-                        _maxZoom,
-                      );
-                      context.read<PlateCameraCaptureZoomBloc>().add(
-                        ZoomCamera(newZoom),
-                      );
-                    }
-                  },
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      CameraPreview(controller),
-
-                      Positioned(
-                        top: 20,
-                        right: 20,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black54,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            "🔍 x${currentZoom.toStringAsFixed(1)}",
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
+                  )
+                else if (controller != null && controller.value.isInitialized)
+                  GestureDetector(
+                    onScaleStart: (details) => _baseZoom = currentZoom,
+                    onScaleUpdate: (details) {
+                      if (details.scale != 1.0) {
+                        final newZoom = (_baseZoom * details.scale).clamp(
+                          _minZoom,
+                          _maxZoom,
+                        );
+                        context.read<PlateCameraCaptureZoomBloc>().add(
+                          ZoomCamera(newZoom),
+                        );
+                      }
+                    },
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        CameraPreview(controller),
+            
+                        Positioned(
+                          top: 20,
+                          right: 20,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.black54,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              "🔍 x${currentZoom.toStringAsFixed(1)}",
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ),
+                      ],
+                    ),
+                  )
+                else
+                  const Center(
+                    child: CircularProgressIndicator(color: Colors.tealAccent),
+                  ),
+            
+                if (state.isProcessing)
+                  Positioned(
+                    bottom: 120,
+                    left: 50,
+                    right: 50,
+                    child: LinearProgressIndicator(
+                      value: state.progress,
+                      color: Colors.tealAccent,
+                      backgroundColor: Colors.white10,
+                    ),
+                  ),
+            
+                if (state.message != null)
+                  Positioned(
+                    bottom: 80,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: Text(
+                        state.message!,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 15,
+                        ),
                       ),
-                    ],
+                    ),
                   ),
-                )
-              else
-                const Center(
-                  child: CircularProgressIndicator(color: Colors.tealAccent),
-                ),
-
-              if (state.isProcessing)
-                Positioned(
-                  bottom: 120,
-                  left: 50,
-                  right: 50,
-                  child: LinearProgressIndicator(
-                    value: state.progress,
-                    color: Colors.tealAccent,
-                    backgroundColor: Colors.white10,
+            
+                if (controller != null && controller.value.isInitialized)
+                  Positioned(
+                    bottom: 160,
+                    left: 40,
+                    right: 40,
+                    child: Column(
+                      children: [
+                        SliderTheme(
+                          data: SliderThemeData(
+                            activeTrackColor: Colors.tealAccent,
+                            inactiveTrackColor: Colors.white24,
+                            thumbColor: Colors.tealAccent,
+                            overlayColor: Colors.tealAccent.withOpacity(0.2),
+                            trackHeight: 3,
+                          ),
+                          child: Slider(
+                            min: _minZoom,
+                            max: _maxZoom > _minZoom ? _maxZoom : _minZoom + 1,
+                            divisions: 20,
+                            value: currentZoom.clamp(_minZoom, _maxZoom),
+                            label: "x${currentZoom.toStringAsFixed(1)}",
+                            onChanged: (v) => context
+                                .read<PlateCameraCaptureZoomBloc>()
+                                .add(ZoomCamera(v)),
+                          ),
+                        ),
+                        const Text(
+                          "Geser atau cubit layar untuk zoom",
+                          style: TextStyle(color: Colors.white38, fontSize: 12),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-
-              if (state.message != null)
+            
                 Positioned(
-                  bottom: 80,
+                  bottom: 25,
                   left: 0,
                   right: 0,
                   child: Center(
-                    child: Text(
-                      state.message!,
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 15,
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.camera_alt),
+                      label: Text(
+                        state.isProcessing ? "Memproses..." : "Ambil Foto",
                       ),
-                    ),
-                  ),
-                ),
-
-              if (controller != null && controller.value.isInitialized)
-                Positioned(
-                  bottom: 160,
-                  left: 40,
-                  right: 40,
-                  child: Column(
-                    children: [
-                      SliderTheme(
-                        data: SliderThemeData(
-                          activeTrackColor: Colors.tealAccent,
-                          inactiveTrackColor: Colors.white24,
-                          thumbColor: Colors.tealAccent,
-                          overlayColor: Colors.tealAccent.withOpacity(0.2),
-                          trackHeight: 3,
+                      onPressed: state.isReady && !state.isProcessing
+                          ? () => context.read<PlateCameraCaptureZoomBloc>().add(
+                              CapturePhoto(),
+                            )
+                          : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.tealAccent.withOpacity(0.3),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 30,
+                          vertical: 14,
                         ),
-                        child: Slider(
-                          min: _minZoom,
-                          max: _maxZoom > _minZoom ? _maxZoom : _minZoom + 1,
-                          divisions: 20,
-                          value: currentZoom.clamp(_minZoom, _maxZoom),
-                          label: "x${currentZoom.toStringAsFixed(1)}",
-                          onChanged: (v) => context
-                              .read<PlateCameraCaptureZoomBloc>()
-                              .add(ZoomCamera(v)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
                         ),
                       ),
-                      const Text(
-                        "Geser atau cubit layar untuk zoom",
-                        style: TextStyle(color: Colors.white38, fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ),
-
-              Positioned(
-                bottom: 25,
-                left: 0,
-                right: 0,
-                child: Center(
-                  child: ElevatedButton.icon(
-                    icon: const Icon(Icons.camera_alt),
-                    label: Text(
-                      state.isProcessing ? "Memproses..." : "Ambil Foto",
-                    ),
-                    onPressed: state.isReady && !state.isProcessing
-                        ? () => context.read<PlateCameraCaptureZoomBloc>().add(
-                            CapturePhoto(),
-                          )
-                        : null,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.tealAccent.withOpacity(0.3),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 30,
-                        vertical: 14,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },

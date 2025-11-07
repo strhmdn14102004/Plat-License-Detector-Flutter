@@ -107,52 +107,54 @@ class _PlateScanRealtimePageState extends State<PlateScanRealtimePage>
                 },
               ),
             ),
-            body: Stack(
-              fit: StackFit.expand,
-              children: [
-                const _GradientBackground(),
-                if (_scanning &&
-                    state.isCameraReady &&
-                    controller != null &&
-                    controller.value.isInitialized)
-                  _CameraLayer(controller: controller)
-                else
-                  const _IdleLayer(),
-                const _FocusOverlay(),
-                Positioned(
-                  top: kToolbarHeight + 40,
-                  left: 20,
-                  right: 20,
-                  child: _HudStatus(
-                    scanning: _scanning,
-                    message: state.message,
-                  ),
-                ),
-                const Positioned(
-                  bottom: 120,
-                  left: 16,
-                  right: 16,
-                  child: _GpuHint(),
-                ),
-                Positioned(
-                  bottom: 40,
-                  left: 0,
-                  right: 0,
-                  child: Center(
-                    child: _toggleButton(
+            body: SafeArea(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  const _GradientBackground(),
+                  if (_scanning &&
+                      state.isCameraReady &&
+                      controller != null &&
+                      controller.value.isInitialized)
+                    _CameraLayer(controller: controller)
+                  else
+                    const _IdleLayer(),
+                  const _FocusOverlay(),
+                  Positioned(
+                    top: kToolbarHeight + 40,
+                    left: 20,
+                    right: 20,
+                    child: _HudStatus(
                       scanning: _scanning,
-                      onTap: _toggleScan,
+                      message: state.message,
                     ),
                   ),
-                ),
-                if (_savedPlates.isNotEmpty)
-                  Positioned(
-                    bottom: 190,
+                  const Positioned(
+                    bottom: 120,
                     left: 16,
                     right: 16,
-                    child: _LastResultToast(text: _savedPlates.last),
+                    child: _GpuHint(),
                   ),
-              ],
+                  Positioned(
+                    bottom: 40,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: _toggleButton(
+                        scanning: _scanning,
+                        onTap: _toggleScan,
+                      ),
+                    ),
+                  ),
+                  if (_savedPlates.isNotEmpty)
+                    Positioned(
+                      bottom: 190,
+                      left: 16,
+                      right: 16,
+                      child: _LastResultToast(text: _savedPlates.last),
+                    ),
+                ],
+              ),
             ),
           );
         },

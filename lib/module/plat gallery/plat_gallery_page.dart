@@ -124,115 +124,117 @@ class _PlateGalleryPageState extends State<PlateGalleryPage>
             elevation: 0,
             title: const Text("Mode Galeri Scanner"),
           ),
-          body: Stack(
-            children: [
-              if (state.preview != null)
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 400),
-                  child: Center(
-                    key: ValueKey(state.preview),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          Image.memory(
-                            state.preview!,
-                            fit: BoxFit.contain,
-                            gaplessPlayback: true,
-                          ),
-
-                          if (state.isProcessing)
-                            AnimatedBuilder(
-                              animation: _animCtl,
-                              builder: (context, _) => BackdropFilter(
-                                filter: ImageFilter.blur(
-                                  sigmaX: 10 * _animCtl.value,
-                                  sigmaY: 10 * _animCtl.value,
-                                ),
-                                child: Shimmer.fromColors(
-                                  baseColor: Colors.tealAccent.withOpacity(
-                                    0.25,
+          body: SafeArea(
+            child: Stack(
+              children: [
+                if (state.preview != null)
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 400),
+                    child: Center(
+                      key: ValueKey(state.preview),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            Image.memory(
+                              state.preview!,
+                              fit: BoxFit.contain,
+                              gaplessPlayback: true,
+                            ),
+            
+                            if (state.isProcessing)
+                              AnimatedBuilder(
+                                animation: _animCtl,
+                                builder: (context, _) => BackdropFilter(
+                                  filter: ImageFilter.blur(
+                                    sigmaX: 10 * _animCtl.value,
+                                    sigmaY: 10 * _animCtl.value,
                                   ),
-                                  highlightColor: Colors.white.withOpacity(0.1),
-                                  child: Container(
-                                    color: Colors.black.withOpacity(0.25),
+                                  child: Shimmer.fromColors(
+                                    baseColor: Colors.tealAccent.withOpacity(
+                                      0.25,
+                                    ),
+                                    highlightColor: Colors.white.withOpacity(0.1),
+                                    child: Container(
+                                      color: Colors.black.withOpacity(0.25),
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                        ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  const Center(
+                    child: Text(
+                      "Pilih gambar yang mengandung plat kendaraan",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white70, fontSize: 15),
+                    ),
+                  ),
+            
+                if (state.isProcessing)
+                  Positioned(
+                    bottom: 110,
+                    left: 50,
+                    right: 50,
+                    child: LinearProgressIndicator(
+                      value: (state.progress > 0 && state.progress <= 1)
+                          ? state.progress
+                          : null,
+                      color: Colors.tealAccent,
+                      backgroundColor: Colors.white10,
+                    ),
+                  ),
+            
+                if (state.message != null)
+                  Positioned(
+                    bottom: 70,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: Text(
+                        state.message!,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 15,
+                        ),
                       ),
                     ),
                   ),
-                )
-              else
-                const Center(
-                  child: Text(
-                    "Pilih gambar yang mengandung plat kendaraan",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.white70, fontSize: 15),
-                  ),
-                ),
-
-              if (state.isProcessing)
+            
                 Positioned(
-                  bottom: 110,
-                  left: 50,
-                  right: 50,
-                  child: LinearProgressIndicator(
-                    value: (state.progress > 0 && state.progress <= 1)
-                        ? state.progress
-                        : null,
-                    color: Colors.tealAccent,
-                    backgroundColor: Colors.white10,
-                  ),
-                ),
-
-              if (state.message != null)
-                Positioned(
-                  bottom: 70,
+                  bottom: 25,
                   left: 0,
                   right: 0,
                   child: Center(
-                    child: Text(
-                      state.message!,
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 15,
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.image_search_rounded),
+                      label: Text(
+                        state.isProcessing ? "Memproses..." : "Pilih Gambar",
+                      ),
+                      onPressed: state.isProcessing
+                          ? null
+                          : () => _pickImage(context),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.tealAccent.withOpacity(0.3),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 30,
+                          vertical: 14,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                       ),
                     ),
                   ),
                 ),
-
-              Positioned(
-                bottom: 25,
-                left: 0,
-                right: 0,
-                child: Center(
-                  child: ElevatedButton.icon(
-                    icon: const Icon(Icons.image_search_rounded),
-                    label: Text(
-                      state.isProcessing ? "Memproses..." : "Pilih Gambar",
-                    ),
-                    onPressed: state.isProcessing
-                        ? null
-                        : () => _pickImage(context),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.tealAccent.withOpacity(0.3),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 30,
-                        vertical: 14,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },
