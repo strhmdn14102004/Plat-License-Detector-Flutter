@@ -72,7 +72,7 @@ class LensSelectorBloc extends Bloc<LensSelectorEvent, LensSelectorState> {
     emit(
       state.copyWith(
         selectedSensor: event.sensor,
-        message: () => 'Lensa ${lensZoomLabel(event.sensor.sensorType)} dipilih',
+        message: () => 'Lensa ${lensZoomLabel(event.sensor.type)} dipilih',
         error: () => null,
       ),
     );

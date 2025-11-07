@@ -69,7 +69,7 @@ class _LensSelectorPageState extends State<LensSelectorPage> {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     return p.join(
       dir.path,
-      'lens_${sensor.sensorType.name}_$timestamp.jpg',
+      'lens_${sensor.type.name}_$timestamp.jpg',
     );
   }
 
@@ -104,7 +104,7 @@ class _LensSelectorPageState extends State<LensSelectorPage> {
               if (sensor != null)
                 Expanded(
                   child: CameraAwesomeBuilder.awesome(
-                    key: ValueKey(sensor.sensorType.name),
+                    key: ValueKey(sensor.type.name),
                     saveConfig: SaveConfig.photo(
                       pathBuilder: (sensor) => _buildPath(sensor),
                     ),
@@ -132,7 +132,7 @@ class _LensSelectorPageState extends State<LensSelectorPage> {
                     children: state.sensors
                         .map(
                           (sensor) => ChoiceChip(
-                            label: Text(lensZoomLabel(sensor.sensorType)),
+                            label: Text(lensZoomLabel(sensor.type)),
                             selected: sensor == state.selectedSensor,
                             onSelected: (_) => bloc.add(
                               LensSelectorSensorSelected(sensor),
