@@ -59,14 +59,15 @@ jobs:
       - name: Create Release and Upload IPA
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v1.1
-          name: "Release v1.1 (iOS)"
+          tag_name: v1.2
+          name: "Release v1.2 (iOS)"
           body: |
             🚀 iOS release  
             - Minimum iOS 14  
             - No codesign (manual signing required for App Store upload)
             - tambahan fitur zoom ( testing untuk ios dulu )
             - perbaikan ui
+            - zoom fitur on ios 0,5 1x 2x / android digital zoom
           files: build/ios/iphoneos/PlatLicenseDetector.ipa
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
