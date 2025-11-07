@@ -1,4 +1,6 @@
-import 'package:camerawesome/camerawesome_plugin.dart';
+import 'package:camerawesome/camerawesome_plugin.dart' as camerawesome;
+
+typedef SensorType = camerawesome.SensorType;
 
 String lensZoomLabel(SensorType type) {
   switch (type) {

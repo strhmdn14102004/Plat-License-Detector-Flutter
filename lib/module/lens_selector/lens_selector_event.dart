@@ -1,4 +1,6 @@
-import 'package:camerawesome/camerawesome_plugin.dart';
+import 'package:camerawesome/camerawesome_plugin.dart' as camerawesome;
+
+typedef Sensor = camerawesome.Sensor;
 
 abstract class LensSelectorEvent {
   const LensSelectorEvent();
@@ -11,18 +13,4 @@ class LensSelectorStarted extends LensSelectorEvent {
 class LensSelectorSensorSelected extends LensSelectorEvent {
   final Sensor sensor;
   const LensSelectorSensorSelected(this.sensor);
-}
-
-class LensSelectorCaptureInitiated extends LensSelectorEvent {
-  const LensSelectorCaptureInitiated();
-}
-
-class LensSelectorCaptureCompleted extends LensSelectorEvent {
-  final String path;
-  const LensSelectorCaptureCompleted(this.path);
-}
-
-class LensSelectorCaptureFailed extends LensSelectorEvent {
-  final String message;
-  const LensSelectorCaptureFailed(this.message);
 }

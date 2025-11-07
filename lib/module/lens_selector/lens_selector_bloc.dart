@@ -1,18 +1,19 @@
 import 'package:bloc/bloc.dart';
-import 'package:camerawesome/camerawesome_plugin.dart';
+import 'package:camerawesome/camerawesome_plugin.dart' as camerawesome;
 import 'package:flutter/foundation.dart';
 
 import 'lens_label.dart';
 import 'lens_selector_event.dart';
 import 'lens_selector_state.dart';
 
+typedef Sensor = camerawesome.Sensor;
+typedef SensorType = camerawesome.SensorType;
+typedef SensorPosition = camerawesome.SensorPosition;
+
 class LensSelectorBloc extends Bloc<LensSelectorEvent, LensSelectorState> {
   LensSelectorBloc() : super(LensSelectorState.initial()) {
     on<LensSelectorStarted>(_onStarted);
     on<LensSelectorSensorSelected>(_onSensorSelected);
-    on<LensSelectorCaptureInitiated>(_onCaptureInitiated);
-    on<LensSelectorCaptureCompleted>(_onCaptureCompleted);
-    on<LensSelectorCaptureFailed>(_onCaptureFailed);
   }
 
   Future<void> _onStarted(
@@ -21,7 +22,7 @@ class LensSelectorBloc extends Bloc<LensSelectorEvent, LensSelectorState> {
   ) async {
     emit(state.copyWith(isLoading: true, message: () => '🔄 Memindai lensa...'));
     try {
-      final sensors = await availableSensors();
+      final sensors = await camerawesome.availableSensors();
       final usable = sensors
           .where((sensor) => sensor.position == SensorPosition.back)
           .toList()
@@ -31,9 +32,10 @@ class LensSelectorBloc extends Bloc<LensSelectorEvent, LensSelectorState> {
         emit(
           state.copyWith(
             isLoading: false,
-            sensors: sensors,
-            selectedSensor: null,
+            sensors: const <Sensor>[],
+            selectedSensor: () => null,
             error: () => 'Tidak ditemukan lensa belakang pada perangkat ini',
+            message: () => null,
           ),
         );
         return;
@@ -48,8 +50,9 @@ class LensSelectorBloc extends Bloc<LensSelectorEvent, LensSelectorState> {
         state.copyWith(
           isLoading: false,
           sensors: usable,
-          selectedSensor: preferred,
-          message: () => 'Pilih lensa untuk mengambil foto',
+          selectedSensor: () => preferred,
+          message: () =>
+              'Pilih lensa dan gunakan tombol rana bawaan untuk mengambil foto',
           error: () => null,
         ),
       );
@@ -69,51 +72,23 @@ class LensSelectorBloc extends Bloc<LensSelectorEvent, LensSelectorState> {
     LensSelectorSensorSelected event,
     Emitter<LensSelectorState> emit,
   ) {
-    emit(
-      state.copyWith(
-        selectedSensor: event.sensor,
-        message: () => 'Lensa ${lensZoomLabel(event.sensor.type)} dipilih',
-        error: () => null,
-      ),
-    );
-  }
+    if (state.selectedSensor == event.sensor) {
+      emit(
+        state.copyWith(
+          message: () =>
+              'Lensa ${lensZoomLabel(event.sensor.sensorType)} sudah aktif',
+          error: () => null,
+        ),
+      );
+      return;
+    }
 
-  void _onCaptureInitiated(
-    LensSelectorCaptureInitiated event,
-    Emitter<LensSelectorState> emit,
-  ) {
     emit(
       state.copyWith(
-        isCapturing: true,
-        message: () => '📸 Mengambil foto...',
+        selectedSensor: () => event.sensor,
+        message: () =>
+            'Lensa ${lensZoomLabel(event.sensor.sensorType)} aktif. Gunakan tombol rana untuk memotret',
         error: () => null,
-      ),
-    );
-  }
-
-  void _onCaptureCompleted(
-    LensSelectorCaptureCompleted event,
-    Emitter<LensSelectorState> emit,
-  ) {
-    emit(
-      state.copyWith(
-        isCapturing: false,
-        lastCapturePath: event.path,
-        message: () => '✅ Foto tersimpan',
-        error: () => null,
-      ),
-    );
-  }
-
-  void _onCaptureFailed(
-    LensSelectorCaptureFailed event,
-    Emitter<LensSelectorState> emit,
-  ) {
-    emit(
-      state.copyWith(
-        isCapturing: false,
-        error: () => event.message,
-        message: () => null,
       ),
     );
   }
