@@ -202,6 +202,171 @@ class _LensSelectorPageState extends State<LensSelectorPage>
         aspectRatio: camerawesome.CameraAspectRatios.ratio_4_3,
       ),
     );
+
+    final bloc = context.read<PlateCameraCaptureBloc>();
+    bloc.add(InitializeCamera(_camera!));
+  }
+
+  @override
+  void dispose() {
+    context.read<PlateCameraCaptureBloc>().add(DisposeCamera());
+    _animCtl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _configureController(CameraController controller) async {
+    if (!controller.value.isInitialized || _isConfiguringLens) return;
+    if (identical(_configuredController, controller)) return;
+
+    _isConfiguringLens = true;
+    _configuredController = controller;
+
+    try {
+      final minZoom = await controller.getMinZoomLevel();
+      final maxZoom = await controller.getMaxZoomLevel();
+
+      final options = <_LensOption>[];
+      if (minZoom <= 0.6) {
+        options.add(const _LensOption('0.5x', 0.5));
+      }
+
+      final standardZoom = _clampZoom(1.0, minZoom, maxZoom);
+      options.add(_LensOption('1x', standardZoom));
+
+      if (maxZoom >= 2.0) {
+        final teleZoom = maxZoom >= 2.8 ? 3.0 : maxZoom;
+        final label = teleZoom >= 2.8 ? '3x' : '${teleZoom.toStringAsFixed(1)}x';
+        options.add(_LensOption(label, teleZoom));
+      }
+
+      _lensOptions = options;
+
+      final match = _matchExistingSelection(options);
+      final targetZoom = _clampZoom(match.zoom, minZoom, maxZoom);
+
+      try {
+        await controller.setZoomLevel(targetZoom);
+      } catch (_) {}
+
+      final actualZoom = controller.value.zoomLevel;
+      _selectedLens = _matchSelectionByZoom(options, actualZoom) ?? match;
+
+      _flashSupported = await _ensureFlash(controller);
+    } finally {
+      if (mounted) {
+        setState(() {});
+      }
+      _isConfiguringLens = false;
+    }
+  }
+
+  Future<bool> _ensureFlash(CameraController controller) async {
+    _currentFlashMode = FlashMode.off;
+    try {
+      await controller.setFlashMode(_currentFlashMode);
+      return true;
+    } on CameraException {
+      return false;
+    }
+  }
+
+  _LensOption _matchExistingSelection(List<_LensOption> options) {
+    if (_selectedLens != null) {
+      final existing = _matchSelectionByZoom(options, _selectedLens!.zoom);
+      if (existing != null) {
+        return existing;
+      }
+    }
+
+    final standard = options.firstWhere(
+      (opt) => opt.label == '1x',
+      orElse: () => options.first,
+    );
+    return standard;
+  }
+
+  _LensOption? _matchSelectionByZoom(
+    List<_LensOption> options,
+    double zoom,
+  ) {
+    const epsilon = 0.05;
+    for (final option in options) {
+      if ((option.zoom - zoom).abs() <= epsilon) {
+        return option;
+      }
+    }
+    return null;
+  }
+
+  double _clampZoom(double value, double minZoom, double maxZoom) {
+    if (value < minZoom) return minZoom;
+    if (value > maxZoom) return maxZoom;
+    return value;
+  }
+
+  Future<void> _selectLens(_LensOption option) async {
+    final controller = context.read<PlateCameraCaptureBloc>().state.controller;
+    if (controller == null) return;
+    try {
+      final minZoom = await controller.getMinZoomLevel();
+      final maxZoom = await controller.getMaxZoomLevel();
+      final zoom = _clampZoom(option.zoom, minZoom, maxZoom);
+      await controller.setZoomLevel(zoom);
+      if (!mounted) return;
+      setState(() {
+        _selectedLens = option;
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _toggleFlash() async {
+    if (!_flashSupported) return;
+    final controller = context.read<PlateCameraCaptureBloc>().state.controller;
+    if (controller == null) return;
+
+    FlashMode nextMode;
+    switch (_currentFlashMode) {
+      case FlashMode.off:
+        nextMode = FlashMode.auto;
+        break;
+      case FlashMode.auto:
+        nextMode = FlashMode.torch;
+        break;
+      default:
+        nextMode = FlashMode.off;
+        break;
+    }
+
+    try {
+      await controller.setFlashMode(nextMode);
+      if (!mounted) return;
+      setState(() {
+        _currentFlashMode = nextMode;
+      });
+    } on CameraException {
+      if (!mounted) return;
+      setState(() {
+        _currentFlashMode = FlashMode.off;
+        _flashSupported = false;
+      });
+    }
+  }
+
+  IconData _flashIcon(FlashMode mode) {
+    switch (mode) {
+      case FlashMode.off:
+        return Icons.flash_off_rounded;
+      case FlashMode.auto:
+        return Icons.flash_auto_rounded;
+      case FlashMode.always:
+      case FlashMode.torch:
+        return Icons.flash_on_rounded;
+    }
+  }
+
+  String _lensSummary() {
+    if (_lensOptions.isEmpty) return '-';
+    return _lensOptions.map((opt) => opt.label).join(' • ');
   }
 
   Future<void> _ensureIosFlashMode() async {
