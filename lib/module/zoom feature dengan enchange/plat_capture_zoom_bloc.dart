@@ -119,7 +119,7 @@ class PlateCameraCaptureZoomBloc
 
       img = imglib.bakeOrientation(img);
 
-      final zoomLevel = controller.value.zoomLevel;
+      final zoomLevel = state.currentZoom;
       img = _applyDigitalZoom(img, zoomLevel);
       img = _enhanceForPlate(img, zoomLevel: zoomLevel);
 
