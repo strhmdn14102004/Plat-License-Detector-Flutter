@@ -1,6 +1,6 @@
 import 'package:camerawesome/camerawesome_plugin.dart' as camerawesome;
 
-typedef Sensor = camerawesome.Sensor;
+typedef Sensor = camerawesome.SensorTypeDevice;
 
 class LensSelectorState {
   final bool isLoading;
@@ -37,8 +37,9 @@ class LensSelectorState {
     return LensSelectorState(
       isLoading: isLoading ?? this.isLoading,
       sensors: sensors ?? this.sensors,
-      selectedSensor:
-          selectedSensor != null ? selectedSensor() : this.selectedSensor,
+      selectedSensor: selectedSensor != null
+          ? selectedSensor()
+          : this.selectedSensor,
       message: message != null ? message() : this.message,
       error: error != null ? error() : this.error,
     );

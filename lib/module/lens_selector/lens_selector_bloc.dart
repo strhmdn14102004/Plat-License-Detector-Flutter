@@ -1,3 +1,5 @@
+// ignore_for_file: depend_on_referenced_packages
+
 import 'package:bloc/bloc.dart';
 import 'package:camerawesome/camerawesome_plugin.dart' as camerawesome;
 import 'package:flutter/foundation.dart';
@@ -6,9 +8,8 @@ import 'lens_label.dart';
 import 'lens_selector_event.dart';
 import 'lens_selector_state.dart';
 
-typedef Sensor = camerawesome.Sensor;
+typedef Sensor = camerawesome.SensorTypeDevice;
 typedef SensorType = camerawesome.SensorType;
-typedef SensorPosition = camerawesome.SensorPosition;
 
 class LensSelectorBloc extends Bloc<LensSelectorEvent, LensSelectorState> {
   LensSelectorBloc() : super(LensSelectorState.initial()) {
@@ -20,13 +21,22 @@ class LensSelectorBloc extends Bloc<LensSelectorEvent, LensSelectorState> {
     LensSelectorStarted event,
     Emitter<LensSelectorState> emit,
   ) async {
-    emit(state.copyWith(isLoading: true, message: () => '🔄 Memindai lensa...'));
+    emit(
+      state.copyWith(isLoading: true, message: () => '🔄 Memindai lensa...'),
+    );
     try {
-      final sensors = await camerawesome.availableSensors();
-      final usable = sensors
-          .where((sensor) => sensor.position == SensorPosition.back)
-          .toList()
-        ..sort((a, b) => _lensOrder(a.sensorType).compareTo(_lensOrder(b.sensorType)));
+      final sensorData = await camerawesome.CamerawesomePlugin.getSensors();
+      final usable = <camerawesome.SensorTypeDevice>[];
+
+      if (sensorData.wideAngle != null) usable.add(sensorData.wideAngle!);
+      if (sensorData.ultraWideAngle != null) {
+        usable.add(sensorData.ultraWideAngle!);
+      }
+      if (sensorData.telephoto != null) usable.add(sensorData.telephoto!);
+
+      usable.sort(
+        (a, b) => _lensOrder(a.sensorType).compareTo(_lensOrder(b.sensorType)),
+      );
 
       if (usable.isEmpty) {
         emit(
@@ -42,7 +52,7 @@ class LensSelectorBloc extends Bloc<LensSelectorEvent, LensSelectorState> {
       }
 
       final preferred = usable.firstWhere(
-        (sensor) => sensor.sensorType == SensorType.wideAngle,
+        (s) => s.sensorType == camerawesome.SensorType.wideAngle,
         orElse: () => usable.first,
       );
 
@@ -51,8 +61,7 @@ class LensSelectorBloc extends Bloc<LensSelectorEvent, LensSelectorState> {
           isLoading: false,
           sensors: usable,
           selectedSensor: () => preferred,
-          message: () =>
-              'Pilih lensa dan gunakan tombol rana bawaan untuk mengambil foto',
+          message: () => 'Pilih lensa kamera (0.5x / 1x / 3x)',
           error: () => null,
         ),
       );
@@ -105,5 +114,4 @@ class LensSelectorBloc extends Bloc<LensSelectorEvent, LensSelectorState> {
         return 3;
     }
   }
-
 }

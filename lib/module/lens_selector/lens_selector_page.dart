@@ -1,3 +1,7 @@
+// ignore_for_file: use_build_context_synchronously
+
+import 'dart:io';
+
 import 'package:camerawesome/camerawesome_plugin.dart' as camerawesome;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -6,6 +10,7 @@ import 'lens_label.dart';
 import 'lens_selector_bloc.dart';
 import 'lens_selector_event.dart';
 import 'lens_selector_state.dart';
+import 'sensor_extension.dart';
 
 class LensSelectorPage extends StatefulWidget {
   const LensSelectorPage({super.key});
@@ -26,9 +31,7 @@ class _LensSelectorPageState extends State<LensSelectorPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Pilih Lensa Kamera'),
-      ),
+      appBar: AppBar(title: const Text('Pilih Lensa Kamera')),
       body: BlocConsumer<LensSelectorBloc, LensSelectorState>(
         listener: (context, state) {
           final messenger = ScaffoldMessenger.of(context);
@@ -58,11 +61,51 @@ class _LensSelectorPageState extends State<LensSelectorPage> {
                         key: ValueKey(sensor.sensorType.name),
                         child: camerawesome.CameraAwesomeBuilder.awesome(
                           sensorConfig: camerawesome.SensorConfig.single(
-                            sensor: sensor,
+                            sensor: sensor.toSensor(),
                             flashMode: camerawesome.FlashMode.none,
-                            aspectRatio: camerawesome.CameraAspectRatios.ratio_4_3,
+                            aspectRatio:
+                                camerawesome.CameraAspectRatios.ratio_4_3,
                           ),
                           saveConfig: camerawesome.SaveConfig.photo(),
+                          onMediaTap: (_) {},
+                          previewDecoratorBuilder: (cameraState, preview) {
+                            return Stack(
+                              children: [
+                                Positioned.fill(
+                                  child: camerawesome.AwesomeCameraPreview(
+                                    state: cameraState,
+                                    interfaceBuilder:
+                                        (state, analysisPreview) =>
+                                            const SizedBox.shrink(),
+                                    padding: EdgeInsets.zero,
+                                    alignment: Alignment.center,
+                                  ),
+                                ),
+
+                                Positioned(
+                                  bottom: 20,
+                                  left: 0,
+                                  right: 0,
+                                  child: Center(
+                                    child: Text(
+                                      'Aktif: ${lensZoomLabel(sensor.sensorType)}',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        shadows: [
+                                          Shadow(
+                                            color: Colors.black,
+                                            blurRadius: 6,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
                         ),
                       )
                     : const Center(
@@ -71,7 +114,10 @@ class _LensSelectorPageState extends State<LensSelectorPage> {
               ),
               if (state.sensors.isNotEmpty)
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 16,
+                  ),
                   child: Wrap(
                     spacing: 12,
                     runSpacing: 12,
@@ -80,9 +126,21 @@ class _LensSelectorPageState extends State<LensSelectorPage> {
                           (sensor) => ChoiceChip(
                             label: Text(lensZoomLabel(sensor.sensorType)),
                             selected: sensor == state.selectedSensor,
-                            onSelected: (_) => bloc.add(
-                              LensSelectorSensorSelected(sensor),
-                            ),
+                            onSelected: (_) async {
+                              bloc.add(LensSelectorSensorSelected(sensor));
+
+                              if (Platform.isAndroid) {
+                                final zoom = switch (sensor.sensorType) {
+                                  camerawesome.SensorType.ultraWideAngle => 0.5,
+                                  camerawesome.SensorType.wideAngle => 1.0,
+                                  camerawesome.SensorType.telephoto => 3.0,
+                                  _ => 1.0,
+                                };
+                                await camerawesome.CamerawesomePlugin.setZoom(
+                                  zoom,
+                                );
+                              }
+                            },
                           ),
                         )
                         .toList(),
@@ -93,10 +151,9 @@ class _LensSelectorPageState extends State<LensSelectorPage> {
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
                   child: Text(
                     state.message!,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodyMedium
-                        ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                 ),

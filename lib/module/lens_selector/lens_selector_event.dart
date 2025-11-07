@@ -1,6 +1,6 @@
 import 'package:camerawesome/camerawesome_plugin.dart' as camerawesome;
 
-typedef Sensor = camerawesome.Sensor;
+typedef Sensor = camerawesome.SensorTypeDevice;
 
 abstract class LensSelectorEvent {
   const LensSelectorEvent();
