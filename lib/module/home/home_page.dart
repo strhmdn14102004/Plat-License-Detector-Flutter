@@ -9,6 +9,7 @@ import 'package:vehicle_identification_number/module/plat%20capture/plat_capture
 import 'package:vehicle_identification_number/module/plat%20gallery/plat_gallery_page.dart';
 import 'package:vehicle_identification_number/module/plat%20realtime/plat_realtime_page.dart';
 import 'package:vehicle_identification_number/module/zoom%20feature%20dengan%20enchange/plat_capture_zoom_page.dart';
+import 'package:vehicle_identification_number/module/lens_selector/lens_selector_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -153,6 +154,22 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                         ),
                       ),
                     ),
+
+                  const SizedBox(height: 18),
+
+                  _MainButton(
+                    title: "Multi-Lens Capture",
+                    subtitle: "Pilih lensa ultra wide, wide, atau tele untuk foto",
+                    icon: Icons.switch_camera_rounded,
+                    color1: const Color(0xFF8B5CF6),
+                    color2: const Color(0xFFA855F7),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const LensSelectorPage(),
+                      ),
+                    ),
+                  ),
 
                   const SizedBox(height: 18),
 
