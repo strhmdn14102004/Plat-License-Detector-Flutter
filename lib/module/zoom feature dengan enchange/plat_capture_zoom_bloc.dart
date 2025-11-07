@@ -136,7 +136,7 @@ class PlateCameraCaptureZoomBloc
 
       final detections = await yolo.detect(fullJpg);
 
-      final minArea = img.width * img.height * 0.0015;
+      final minArea = img.width * img.height * 0.0009;
       detections.removeWhere((d) {
         final area = (d.x2 - d.x1) * (d.y2 - d.y1);
         return area < minArea;
