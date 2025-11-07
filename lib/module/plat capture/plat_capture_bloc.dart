@@ -2,6 +2,7 @@
 
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:bloc/bloc.dart';
 import 'package:camera/camera.dart';
@@ -25,6 +26,7 @@ class PlateCameraCaptureBloc
     : super(PlateCameraCaptureState.initial()) {
     on<InitializeCamera>(_onInit);
     on<CapturePhoto>(_onCapture);
+    on<ProcessExternalPhoto>(_onProcessExternalPhoto);
     on<ResetCamera>(_onReset);
     on<DisposeCamera>(_onDispose);
   }
@@ -101,99 +103,7 @@ class PlateCameraCaptureBloc
       final file = await controller.takePicture();
       final bytes = await File(file.path).readAsBytes();
 
-      final img = imglib.decodeImage(bytes);
-      if (img == null) throw Exception("Gagal decode foto");
-
-      final fixed = imglib.bakeOrientation(img);
-      final fullJpg = Uint8List.fromList(imglib.encodeJpg(fixed, quality: 95));
-
-      emit(
-        state.copyWith(
-          isProcessing: true,
-          progress: 0.25,
-          message: '🔍 Mendeteksi plat kendaraan...',
-          preview: fullJpg,
-        ),
-      );
-
-      final detections = await yolo.detect(fullJpg);
-
-      final minArea = fixed.width * fixed.height * 0.0009;
-      detections.removeWhere((d) {
-        final area = (d.x2 - d.x1) * (d.y2 - d.y1);
-        return area < minArea;
-      });
-
-      if (detections.isEmpty) {
-        emit(
-          state.copyWith(
-            isProcessing: false,
-            progress: 1.0,
-            message: '❌ Plat tidak ditemukan',
-            lastText: 'Tidak terbaca',
-            preview: fullJpg,
-          ),
-        );
-        return;
-      }
-
-      detections.sort((a, b) => b.score.compareTo(a.score));
-      final best = detections.first;
-
-      final detectionRect = Rect.fromLTRB(
-        best.x1.toDouble(),
-        best.y1.toDouble(),
-        best.x2.toDouble(),
-        best.y2.toDouble(),
-      );
-      emit(
-        state.copyWith(
-          progress: 0.55,
-          message: '✂️ Memotong area plat kendaraan...',
-          preview: fullJpg,
-        ),
-      );
-
-      final cropped = await cropPlateRegion(
-        fullJpg,
-        detectionRect,
-        marginFactor: 0.3,
-      );
-      if (cropped == null) {
-        emit(
-          state.copyWith(
-            isProcessing: false,
-            progress: 1.0,
-            message: '❌ Gagal crop gambar',
-            lastText: 'Tidak terbaca',
-            preview: fullJpg,
-          ),
-        );
-        return;
-      }
-
-      emit(
-        state.copyWith(
-          progress: 0.75,
-          message: '🧠 Memproses...',
-          preview: cropped,
-        ),
-      );
-
-      final text = await waitForOcrResult(
-        ocr,
-        cropped,
-        timeout: const Duration(seconds: 5),
-      );
-      emit(
-        state.copyWith(
-          isProcessing: false,
-          progress: 1.0,
-          message: text.isEmpty ? '⚠️Plat Tidak terbaca, coba ubah angle\natau cari pencahayaan yang baik' : '✅ Plat: $text',
-          lastText: text.isEmpty ? 'Tidak terbaca' : text,
-          preview: cropped,
-        ),
-      );
+      await _processCapturedBytes(bytes, emit);
     } catch (e, st) {
       debugPrint("❌ Capture error: $e\n$st");
       emit(
@@ -206,6 +116,138 @@ class PlateCameraCaptureBloc
         ),
       );
     }
+  }
+
+  Future<void> _onProcessExternalPhoto(
+    ProcessExternalPhoto ev,
+    Emitter<PlateCameraCaptureState> emit,
+  ) async {
+    emit(
+      state.copyWith(
+        isReady: true,
+        isProcessing: true,
+        progress: 0.2,
+        message: '🔍 Mendeteksi plat kendaraan...',
+        lastText: null,
+        preview: null,
+      ),
+    );
+
+    try {
+      await _processCapturedBytes(ev.bytes, emit);
+    } catch (e, st) {
+      debugPrint('❌ External capture error: $e\n$st');
+      emit(
+        state.copyWith(
+          isProcessing: false,
+          progress: 1.0,
+          message: '❌ Error: $e',
+          lastText: 'Error',
+          preview: null,
+        ),
+      );
+    }
+  }
+
+  Future<void> _processCapturedBytes(
+    Uint8List bytes,
+    Emitter<PlateCameraCaptureState> emit,
+  ) async {
+    final img = imglib.decodeImage(bytes);
+    if (img == null) throw Exception("Gagal decode foto");
+
+    final fixed = imglib.bakeOrientation(img);
+    final fullJpg = Uint8List.fromList(imglib.encodeJpg(fixed, quality: 95));
+
+    emit(
+      state.copyWith(
+        isProcessing: true,
+        progress: 0.25,
+        message: '🔍 Mendeteksi plat kendaraan...',
+        preview: fullJpg,
+      ),
+    );
+
+    final detections = await yolo.detect(fullJpg);
+
+    final minArea = fixed.width * fixed.height * 0.0009;
+    detections.removeWhere((d) {
+      final area = (d.x2 - d.x1) * (d.y2 - d.y1);
+      return area < minArea;
+    });
+
+    if (detections.isEmpty) {
+      emit(
+        state.copyWith(
+          isProcessing: false,
+          progress: 1.0,
+          message: '❌ Plat tidak ditemukan',
+          lastText: 'Tidak terbaca',
+          preview: fullJpg,
+        ),
+      );
+      return;
+    }
+
+    detections.sort((a, b) => b.score.compareTo(a.score));
+    final best = detections.first;
+
+    final detectionRect = Rect.fromLTRB(
+      best.x1.toDouble(),
+      best.y1.toDouble(),
+      best.x2.toDouble(),
+      best.y2.toDouble(),
+    );
+    emit(
+      state.copyWith(
+        progress: 0.55,
+        message: '✂️ Memotong area plat kendaraan...',
+        preview: fullJpg,
+      ),
+    );
+
+    final cropped = await cropPlateRegion(
+      fullJpg,
+      detectionRect,
+      marginFactor: 0.3,
+    );
+    if (cropped == null) {
+      emit(
+        state.copyWith(
+          isProcessing: false,
+          progress: 1.0,
+          message: '❌ Gagal crop gambar',
+          lastText: 'Tidak terbaca',
+          preview: fullJpg,
+        ),
+      );
+      return;
+    }
+
+    emit(
+      state.copyWith(
+        progress: 0.75,
+        message: '🧠 Memproses...',
+        preview: cropped,
+      ),
+    );
+
+    final text = await waitForOcrResult(
+      ocr,
+      cropped,
+      timeout: const Duration(seconds: 5),
+    );
+    emit(
+      state.copyWith(
+        isProcessing: false,
+        progress: 1.0,
+        message: text.isEmpty
+            ? '⚠️Plat Tidak terbaca, coba ubah angle\natau cari pencahayaan yang baik'
+            : '✅ Plat: $text',
+        lastText: text.isEmpty ? 'Tidak terbaca' : text,
+        preview: cropped,
+      ),
+    );
   }
 
   Future<void> _onReset(
