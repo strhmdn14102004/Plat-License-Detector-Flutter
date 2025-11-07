@@ -11,6 +11,8 @@ import 'package:vehicle_identification_number/module/zoom%20feature%20dengan%20e
 import 'package:vehicle_identification_number/module/zoom%20feature%20dengan%20enchange/plat_capture_zoom_page.dart';
 import 'package:vehicle_identification_number/service/ocr_isolate_pool.dart';
 import 'package:vehicle_identification_number/service/yolo_isolate_pool.dart';
+import 'package:vehicle_identification_number/module/lens_selector/lens_selector_bloc.dart';
+import 'package:vehicle_identification_number/module/lens_selector/lens_selector_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -57,6 +59,9 @@ class MyApp extends StatelessWidget {
           create: (_) =>
               PlateCameraCaptureZoomBloc(yolo: yoloPool, ocr: ocrPool),
           child: const PlateCameraCaptureZoomPage(),
+        ),
+        BlocProvider(
+          create: (_) => LensSelectorBloc(),
         ),
       ],
       child: MaterialApp(
