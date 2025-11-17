@@ -143,7 +143,7 @@
     var img = imglib.grayscale(image.clone());
 
     if (aggressive) {
-      img = imglib.histogramEqualization(img);
+      img = _histogramEqualization(img);
       img = imglib.gaussianBlur(img, radius: 1);
     }
 
@@ -154,7 +154,7 @@
       saturation: aggressive ? 0.0 : 0.1,
     );
 
-    img = imglib.unsharp(
+    img = _unsharp(
       img,
       radius: aggressive ? 2 : 1, // wajib int
       amount: aggressive ? 1.2 : 0.8,
@@ -179,4 +179,71 @@
       aggressive: aggressive,
     );
     return Uint8List.fromList(imglib.encodeJpg(enhanced, quality: quality));
+  }
+
+  imglib.Image _histogramEqualization(imglib.Image image) {
+    final histogram = List<int>.filled(256, 0);
+    for (var y = 0; y < image.height; y++) {
+      for (var x = 0; x < image.width; x++) {
+        final pixel = image.getPixel(x, y);
+        final value = imglib.getRed(pixel);
+        histogram[value]++;
+      }
+    }
+
+    final totalPixels = image.width * image.height;
+    var cumulative = 0;
+    final mapping = List<int>.filled(256, 0);
+
+    for (var i = 0; i < histogram.length; i++) {
+      cumulative += histogram[i];
+      final mapped = (cumulative * 255) / totalPixels;
+      mapping[i] = mapped.round().clamp(0, 255);
+    }
+
+    final result = image.clone();
+    for (var y = 0; y < image.height; y++) {
+      for (var x = 0; x < image.width; x++) {
+        final pixel = image.getPixel(x, y);
+        final eq = mapping[imglib.getRed(pixel)];
+        result.setPixelRgba(x, y, eq, eq, eq, imglib.getAlpha(pixel));
+      }
+    }
+
+    return result;
+  }
+
+  int _clampChannel(num value) => value.clamp(0, 255).round();
+
+  imglib.Image _unsharp(
+    imglib.Image image, {
+    int radius = 1,
+    double amount = 0.8,
+  }) {
+    final blurred = imglib.gaussianBlur(image.clone(), radius: radius);
+    final result = image.clone();
+
+    for (var y = 0; y < image.height; y++) {
+      for (var x = 0; x < image.width; x++) {
+        final original = image.getPixel(x, y);
+        final soft = blurred.getPixel(x, y);
+
+        final r = _clampChannel(
+          imglib.getRed(original) +
+              (imglib.getRed(original) - imglib.getRed(soft)) * amount,
+        );
+        final g = _clampChannel(
+          imglib.getGreen(original) +
+              (imglib.getGreen(original) - imglib.getGreen(soft)) * amount,
+        );
+        final b = _clampChannel(
+          imglib.getBlue(original) +
+              (imglib.getBlue(original) - imglib.getBlue(soft)) * amount,
+        );
+
+        result.setPixelRgba(x, y, r, g, b, imglib.getAlpha(original));
+      }
+    }
+
+    return result;
   }
