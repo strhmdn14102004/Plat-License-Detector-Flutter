@@ -186,7 +186,7 @@
     for (var y = 0; y < image.height; y++) {
       for (var x = 0; x < image.width; x++) {
         final pixel = image.getPixel(x, y);
-        final value = imglib.getRed(pixel);
+        final value = pixel.r;
         histogram[value]++;
       }
     }
@@ -205,8 +205,8 @@
     for (var y = 0; y < image.height; y++) {
       for (var x = 0; x < image.width; x++) {
         final pixel = image.getPixel(x, y);
-        final eq = mapping[imglib.getRed(pixel)];
-        result.setPixelRgba(x, y, eq, eq, eq, imglib.getAlpha(pixel));
+        final eq = mapping[pixel.r];
+        result.setPixelRgba(x, y, eq, eq, eq, pixel.a);
       }
     }
 
@@ -229,19 +229,16 @@
         final soft = blurred.getPixel(x, y);
 
         final r = _clampChannel(
-          imglib.getRed(original) +
-              (imglib.getRed(original) - imglib.getRed(soft)) * amount,
+          original.r + (original.r - soft.r) * amount,
         );
         final g = _clampChannel(
-          imglib.getGreen(original) +
-              (imglib.getGreen(original) - imglib.getGreen(soft)) * amount,
+          original.g + (original.g - soft.g) * amount,
         );
         final b = _clampChannel(
-          imglib.getBlue(original) +
-              (imglib.getBlue(original) - imglib.getBlue(soft)) * amount,
+          original.b + (original.b - soft.b) * amount,
         );
 
-        result.setPixelRgba(x, y, r, g, b, imglib.getAlpha(original));
+        result.setPixelRgba(x, y, r, g, b, original.a);
       }
     }
 
