@@ -8,6 +8,7 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:image/image.dart' as imglib;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:vehicle_identification_number/utils/plate_processing.dart';
 
 class OcrIsolatePool {
   final _queue = StreamController<Uint8List>();
@@ -34,13 +35,15 @@ class OcrIsolatePool {
       final isRealtime = diff < 300;
       _lastProcessed = now;
 
-      var img = imglib.decodeImage(jpeg);
-      if (img == null) return null;
+      final original = imglib.decodeImage(jpeg);
+      if (original == null) return null;
 
-      if (isRealtime) {
-        img = imglib.adjustColor(img, brightness: 0.05, contrast: 1.15);
-        img = imglib.gaussianBlur(img, radius: 1);
-      }
+      final img = enhanceForOcr(
+        imglib.bakeOrientation(original),
+        brightness: isRealtime ? 0.08 : 0.12,
+        contrast: isRealtime ? 1.15 : 1.32,
+        aggressive: !isRealtime,
+      );
 
       final tmp = await getTemporaryDirectory();
       final file = File(

@@ -148,7 +148,14 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
                       ),
                     ),
                   ),
-            
+
+                Positioned(
+                  bottom: 120,
+                  left: 16,
+                  right: 16,
+                  child: _EnhancementPanel(state: state),
+                ),
+
                 Positioned(
                   bottom: 5,
                   left: 0,
@@ -291,6 +298,115 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
           ),
         );
       },
+    );
+  }
+}
+
+class _EnhancementPanel extends StatelessWidget {
+  const _EnhancementPanel({required this.state});
+
+  final PlateCameraCaptureState state;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.45),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: const [
+              Icon(Icons.tune, color: Colors.white70, size: 18),
+              SizedBox(width: 8),
+              Text(
+                'Sesuaikan kecerahan & kontras',
+                style: TextStyle(color: Colors.white70, fontSize: 13),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _LabeledSlider(
+            label: 'Brightness',
+            value: state.brightness,
+            min: -0.25,
+            max: 0.35,
+            onChanged: state.isProcessing
+                ? null
+                : (v) => context.read<PlateCameraCaptureBloc>().add(
+                      UpdateEnhancement(
+                        brightness: v,
+                        contrast: state.contrast,
+                      ),
+                    ),
+          ),
+          _LabeledSlider(
+            label: 'Contrast',
+            value: state.contrast,
+            min: 0.85,
+            max: 1.6,
+            onChanged: state.isProcessing
+                ? null
+                : (v) => context.read<PlateCameraCaptureBloc>().add(
+                      UpdateEnhancement(
+                        brightness: state.brightness,
+                        contrast: v,
+                      ),
+                    ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LabeledSlider extends StatelessWidget {
+  const _LabeledSlider({
+    required this.label,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.onChanged,
+  });
+
+  final String label;
+  final double value;
+  final double min;
+  final double max;
+  final ValueChanged<double>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(color: Colors.white70, fontSize: 12),
+            ),
+            Text(
+              value.toStringAsFixed(2),
+              style: const TextStyle(color: Colors.white54, fontSize: 12),
+            ),
+          ],
+        ),
+        Slider(
+          value: value.clamp(min, max),
+          min: min,
+          max: max,
+          activeColor: Colors.tealAccent,
+          inactiveColor: Colors.white12,
+          onChanged: onChanged,
+        ),
+      ],
     );
   }
 }

@@ -133,3 +133,46 @@ Uint8List? _cropPlateRegion(Map<String, dynamic> args) {
     return null;
   }
 }
+
+imglib.Image enhanceForOcr(
+  imglib.Image image, {
+  double brightness = 0.05,
+  double contrast = 1.25,
+  bool aggressive = false,
+}) {
+  var img = imglib.grayscale(image.clone());
+
+  if (aggressive) {
+    img = imglib.equalize(img);
+    img = imglib.gaussianBlur(img, radius: 0.5);
+  }
+
+  img = imglib.adjustColor(
+    img,
+    brightness: brightness,
+    contrast: contrast,
+    saturation: aggressive ? 0.0 : 0.1,
+  );
+
+  img = imglib.unsharpMask(img, radius: 1.2, amount: aggressive ? 1.2 : 0.8);
+
+  return img;
+}
+
+Uint8List applyEnhancementToJpeg(
+  Uint8List jpeg, {
+  double brightness = 0.05,
+  double contrast = 1.25,
+  bool aggressive = false,
+  int quality = 92,
+}) {
+  final img = imglib.decodeImage(jpeg);
+  if (img == null) return jpeg;
+  final enhanced = enhanceForOcr(
+    imglib.bakeOrientation(img),
+    brightness: brightness,
+    contrast: contrast,
+    aggressive: aggressive,
+  );
+  return Uint8List.fromList(imglib.encodeJpg(enhanced, quality: quality));
+}
