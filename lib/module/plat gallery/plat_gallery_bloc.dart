@@ -137,7 +137,9 @@ class PlateGalleryBloc extends Bloc<PlateGalleryEvent, PlateGalleryState> {
         PlateGalleryState(
           isProcessing: false,
           progress: 1.0,
-          message: text.isEmpty ? "⚠️Plat Tidak terbaca, coba ubah angle\natau cari pencahayaan yang baik" : "✅ Plat: $text",
+          message: text.isEmpty
+              ? "⚠️Plat Tidak terbaca, coba ubah angle\natau cari pencahayaan yang baik"
+              : "✅ Plat: $text",
           lastText: text.isEmpty ? "Tidak terbaca" : text,
           preview: cropped,
         ),

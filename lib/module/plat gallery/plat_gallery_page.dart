@@ -1,4 +1,4 @@
-// ignore_for_file: use_build_context_synchronously, deprecated_member_use, invalid_use_of_visible_for_testing_member
+// ignore_for_file: deprecated_member_use, use_build_context_synchronously, invalid_use_of_visible_for_testing_member
 
 import 'dart:io';
 import 'dart:typed_data';

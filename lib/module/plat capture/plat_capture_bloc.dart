@@ -38,7 +38,9 @@ class PlateCameraCaptureBloc
       state.copyWith(
         brightness: ev.brightness,
         contrast: ev.contrast,
-        message: state.isProcessing ? state.message : '🔆 Penyesuaian gambar aktif',
+        message: state.isProcessing
+            ? state.message
+            : '🔆 Penyesuaian gambar aktif',
       ),
     );
   }
@@ -82,7 +84,8 @@ class PlateCameraCaptureBloc
     } catch (e) {
       emit(
         PlateCameraCaptureState.initial().copyWith(
-          message: 'Tunggu beberapa saat, jika masih tidak bisa kembali ke page sebelumnya dan buka kembali page capture ini',
+          message:
+              'Tunggu beberapa saat, jika masih tidak bisa kembali ke page sebelumnya dan buka kembali page capture ini',
         ),
       );
     }
@@ -210,7 +213,9 @@ class PlateCameraCaptureBloc
         state.copyWith(
           isProcessing: false,
           progress: 1.0,
-          message: text.isEmpty ? '⚠️Plat Tidak terbaca, coba ubah angle\natau cari pencahayaan yang baik' : '✅ Plat: $text',
+          message: text.isEmpty
+              ? '⚠️Plat Tidak terbaca, coba ubah angle\natau cari pencahayaan yang baik'
+              : '✅ Plat: $text',
           lastText: text.isEmpty ? 'Tidak terbaca' : text,
           preview: cropped,
         ),

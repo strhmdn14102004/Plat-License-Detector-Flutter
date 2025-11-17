@@ -1,4 +1,4 @@
-// ignore_for_file: use_build_context_synchronously, deprecated_member_use
+// ignore_for_file: deprecated_member_use, use_build_context_synchronously
 
 import 'dart:ui';
 
@@ -102,7 +102,9 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
                                     baseColor: Colors.tealAccent.withOpacity(
                                       0.25,
                                     ),
-                                    highlightColor: Colors.white.withOpacity(0.1),
+                                    highlightColor: Colors.white.withOpacity(
+                                      0.1,
+                                    ),
                                     child: Container(
                                       color: Colors.black.withOpacity(0.25),
                                     ),
@@ -120,7 +122,7 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
                   const Center(
                     child: CircularProgressIndicator(color: Colors.tealAccent),
                   ),
-            
+
                 if (state.isProcessing)
                   Positioned(
                     bottom: 110,
@@ -132,7 +134,7 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
                       backgroundColor: Colors.white10,
                     ),
                   ),
-            
+
                 if (state.message != null)
                   Positioned(
                     bottom: 60,
@@ -339,11 +341,8 @@ class _EnhancementPanel extends StatelessWidget {
             onChanged: state.isProcessing
                 ? null
                 : (v) => context.read<PlateCameraCaptureBloc>().add(
-                      UpdateEnhancement(
-                        brightness: v,
-                        contrast: state.contrast,
-                      ),
-                    ),
+                    UpdateEnhancement(brightness: v, contrast: state.contrast),
+                  ),
           ),
           _LabeledSlider(
             label: 'Contrast',
@@ -353,11 +352,11 @@ class _EnhancementPanel extends StatelessWidget {
             onChanged: state.isProcessing
                 ? null
                 : (v) => context.read<PlateCameraCaptureBloc>().add(
-                      UpdateEnhancement(
-                        brightness: state.brightness,
-                        contrast: v,
-                      ),
+                    UpdateEnhancement(
+                      brightness: state.brightness,
+                      contrast: v,
                     ),
+                  ),
           ),
         ],
       ),

@@ -3,8 +3,8 @@
 import 'dart:io';
 import 'dart:ui';
 
-import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:vehicle_identification_number/module/home/view_data_page.dart';
 import 'package:vehicle_identification_number/module/lens_selector/lens_selector_page.dart';
@@ -55,9 +55,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   void _showSnack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _loadDefaultModel({String? fallbackMessage}) async {
@@ -82,7 +82,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     final pickedPath = result.files.single.path!;
 
     try {
-      final customBytes = await widget.modelManager.tryLoadCustomModel(pickedPath);
+      final customBytes = await widget.modelManager.tryLoadCustomModel(
+        pickedPath,
+      );
       if (customBytes == null) {
         await _loadDefaultModel(
           fallbackMessage: 'Model tidak valid, kembali ke model bawaan.',
@@ -197,7 +199,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                               const SizedBox(
                                 width: 20,
                                 height: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
                               ),
                           ],
                         ),
@@ -217,16 +221,20 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                           runSpacing: 10,
                           children: [
                             ElevatedButton.icon(
-                              onPressed: _isSwitchingModel ? null : _pickCustomModel,
+                              onPressed: _isSwitchingModel
+                                  ? null
+                                  : _pickCustomModel,
                               icon: const Icon(Icons.file_present_rounded),
                               label: const Text('Pilih Model Kustom (.tflite)'),
                             ),
                             OutlinedButton.icon(
-                              onPressed: _isSwitchingModel || _currentModelPath == null
+                              onPressed:
+                                  _isSwitchingModel || _currentModelPath == null
                                   ? null
                                   : () => _loadDefaultModel(
-                                        fallbackMessage: 'Kembali menggunakan model bawaan.',
-                                      ),
+                                      fallbackMessage:
+                                          'Kembali menggunakan model bawaan.',
+                                    ),
                               icon: const Icon(Icons.refresh_rounded),
                               label: const Text('Gunakan Model Default'),
                             ),
