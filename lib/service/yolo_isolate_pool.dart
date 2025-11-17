@@ -37,9 +37,9 @@ class YoloIsolatePool {
   Future<void> init(
     Uint8List modelBytes,
     int inputSize,
-    double threshold,
-    {bool force = false},
-  ) async {
+    double threshold, {
+    bool force = false,
+  }) async {
     if (_initialized && !force) return;
 
     if (force) {

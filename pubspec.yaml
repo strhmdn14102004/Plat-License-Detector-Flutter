@@ -32,3 +32,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/models/license_plate_detector_float16.tflite
+    - assets/models/rec_model_float16.tflite
