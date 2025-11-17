@@ -27,22 +27,6 @@ class PlateCameraCaptureBloc
     on<CapturePhoto>(_onCapture);
     on<ResetCamera>(_onReset);
     on<DisposeCamera>(_onDispose);
-    on<UpdateEnhancement>(_onUpdateEnhancement);
-  }
-
-  void _onUpdateEnhancement(
-    UpdateEnhancement ev,
-    Emitter<PlateCameraCaptureState> emit,
-  ) {
-    emit(
-      state.copyWith(
-        brightness: ev.brightness,
-        contrast: ev.contrast,
-        message: state.isProcessing
-            ? state.message
-            : '🔆 Penyesuaian gambar aktif',
-      ),
-    );
   }
 
   Future<void> _onInit(
@@ -84,8 +68,7 @@ class PlateCameraCaptureBloc
     } catch (e) {
       emit(
         PlateCameraCaptureState.initial().copyWith(
-          message:
-              'Tunggu beberapa saat, jika masih tidak bisa kembali ke page sebelumnya dan buka kembali page capture ini',
+          message: 'Tunggu beberapa saat, jika masih tidak bisa kembali ke page sebelumnya dan buka kembali page capture ini',
         ),
       );
     }
@@ -197,25 +180,16 @@ class PlateCameraCaptureBloc
         ),
       );
 
-      final enhanced = applyEnhancementToJpeg(
-        cropped,
-        brightness: state.brightness,
-        contrast: state.contrast,
-        aggressive: true,
-      );
-
       final text = await waitForOcrResult(
         ocr,
-        enhanced,
+        cropped,
         timeout: const Duration(seconds: 5),
       );
       emit(
         state.copyWith(
           isProcessing: false,
           progress: 1.0,
-          message: text.isEmpty
-              ? '⚠️Plat Tidak terbaca, coba ubah angle\natau cari pencahayaan yang baik'
-              : '✅ Plat: $text',
+          message: text.isEmpty ? '⚠️Plat Tidak terbaca, coba ubah angle\natau cari pencahayaan yang baik' : '✅ Plat: $text',
           lastText: text.isEmpty ? 'Tidak terbaca' : text,
           preview: cropped,
         ),

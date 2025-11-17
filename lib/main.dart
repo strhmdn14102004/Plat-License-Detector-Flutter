@@ -8,7 +8,6 @@ import 'package:vehicle_identification_number/module/plat%20capture/plat_capture
 import 'package:vehicle_identification_number/module/plat%20gallery/plat_gallery_bloc.dart';
 import 'package:vehicle_identification_number/module/plat%20gallery/plat_gallery_page.dart';
 import 'package:vehicle_identification_number/module/plat%20realtime/plat_realtime_bloc.dart';
-import 'package:vehicle_identification_number/service/model_manager.dart';
 import 'package:vehicle_identification_number/service/ocr_isolate_pool.dart';
 import 'package:vehicle_identification_number/service/yolo_isolate_pool.dart';
 
@@ -16,10 +15,11 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
   await Hive.openBox('plates');
-  final settingsBox = await Hive.openBox(ModelManager.settingsBoxName);
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-  final modelManager = ModelManager(settingsBox);
-  final bytes = await modelManager.loadInitialModelBytes();
+  final modelBytes = await rootBundle.load(
+    'assets/models/license_plate_detector_float16.tflite',
+  );
+  final bytes = modelBytes.buffer.asUint8List();
 
   final yoloPool = YoloIsolatePool();
   await yoloPool.init(bytes, 640, 0.5);
@@ -27,22 +27,14 @@ void main() async {
   final ocrPool = OcrIsolatePool();
   ocrPool.start();
 
-  runApp(
-    MyApp(yoloPool: yoloPool, ocrPool: ocrPool, modelManager: modelManager),
-  );
+  runApp(MyApp(yoloPool: yoloPool, ocrPool: ocrPool));
 }
 
 class MyApp extends StatelessWidget {
   final YoloIsolatePool yoloPool;
   final OcrIsolatePool ocrPool;
-  final ModelManager modelManager;
 
-  const MyApp({
-    super.key,
-    required this.yoloPool,
-    required this.ocrPool,
-    required this.modelManager,
-  });
+  const MyApp({super.key, required this.yoloPool, required this.ocrPool});
 
   @override
   Widget build(BuildContext context) {
@@ -73,7 +65,7 @@ class MyApp extends StatelessWidget {
             elevation: 0,
           ),
         ),
-        home: HomePage(yoloPool: yoloPool, modelManager: modelManager),
+        home: const HomePage(),
       ),
     );
   }

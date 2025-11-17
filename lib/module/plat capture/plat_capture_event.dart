@@ -14,11 +14,4 @@ class ResetCamera extends PlateCameraCaptureEvent {
   ResetCamera(this.camera);
 }
 
-class UpdateEnhancement extends PlateCameraCaptureEvent {
-  final double brightness;
-  final double contrast;
-
-  UpdateEnhancement({required this.brightness, required this.contrast});
-}
-
 class DisposeCamera extends PlateCameraCaptureEvent {}
