@@ -1,18 +1,17 @@
 // ignore_for_file: body_might_complete_normally_catch_error
 
 import 'dart:async';
-import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
-import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image/image.dart' as imglib;
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
+import 'package:tflite_flutter/tflite_flutter.dart';
 
 class OcrIsolatePool {
   final _queue = StreamController<Uint8List>();
   bool _running = false;
   DateTime _lastProcessed = DateTime.fromMillisecondsSinceEpoch(0);
+  final _recognizer = _PaddleOcrRecognizer();
 
   final _onResult = StreamController<String>.broadcast();
   Stream<String> get results => _onResult.stream;
@@ -42,24 +41,7 @@ class OcrIsolatePool {
         img = imglib.gaussianBlur(img, radius: 1);
       }
 
-      final tmp = await getTemporaryDirectory();
-      final file = File(
-        p.join(tmp.path, 'ocr_${now.millisecondsSinceEpoch}.jpg'),
-      )..writeAsBytesSync(imglib.encodeJpg(img, quality: 90), flush: true);
-
-      final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
-      final input = InputImage.fromFile(file);
-      final result = await recognizer.processImage(input);
-      await recognizer.close();
-      await file.delete().catchError((_) {});
-
-      final lines = <String>[];
-      for (final block in result.blocks) {
-        for (final line in block.lines) {
-          final txt = line.text.trim().toUpperCase();
-          if (txt.isNotEmpty) lines.add(txt);
-        }
-      }
+      final lines = await _recognizer.recognize(img);
 
       if (lines.isEmpty) return "";
 
@@ -224,5 +206,192 @@ class OcrIsolatePool {
   void dispose() {
     _queue.close();
     _onResult.close();
+  }
+}
+
+class _PaddleOcrRecognizer {
+  static const int _inputWidth = 320;
+  static const int _inputHeight = 48;
+  static const int _outputSeqLen = 40;
+
+  static const List<String> _charset = [
+    ' ',
+    '!',
+    '"',
+    '#',
+    '\$',
+    '%',
+    '&',
+    "'",
+    '(',
+    ')',
+    '*',
+    '+',
+    ',',
+    '-',
+    '.',
+    '/',
+    '0',
+    '1',
+    '2',
+    '3',
+    '4',
+    '5',
+    '6',
+    '7',
+    '8',
+    '9',
+    ':',
+    ';',
+    '<',
+    '=',
+    '>',
+    '?',
+    '@',
+    'A',
+    'B',
+    'C',
+    'D',
+    'E',
+    'F',
+    'G',
+    'H',
+    'I',
+    'J',
+    'K',
+    'L',
+    'M',
+    'N',
+    'O',
+    'P',
+    'Q',
+    'R',
+    'S',
+    'T',
+    'U',
+    'V',
+    'W',
+    'X',
+    'Y',
+    'Z',
+    '[',
+    '\\',
+    ']',
+    '^',
+    '_',
+    '`',
+    'a',
+    'b',
+    'c',
+    'd',
+    'e',
+    'f',
+    'g',
+    'h',
+    'i',
+    'j',
+    'k',
+    'l',
+    'm',
+    'n',
+    'o',
+    'p',
+    'q',
+    'r',
+    's',
+    't',
+    'u',
+    'v',
+    'w',
+    'x',
+    'y',
+    'z',
+    '{',
+    '|',
+    '}',
+    '~',
+    '§',
+  ];
+
+  Interpreter? _interpreter;
+
+  Future<void> _ensureInterpreter() async {
+    _interpreter ??= await Interpreter.fromAsset(
+      'assets/models/rec_model_float16.tflite',
+      options: InterpreterOptions()..threads = 2,
+    );
+  }
+
+  Future<List<String>> recognize(imglib.Image image) async {
+    await _ensureInterpreter();
+
+    final preprocessed = _preprocess(image);
+    final output = List.generate(
+      1,
+      (_) =>
+          List.generate(_outputSeqLen, (_) => List.filled(_charset.length + 1, 0.0)),
+    );
+
+    _interpreter!.run(preprocessed, output);
+
+    final decoded = _decode(output[0]);
+    return decoded.isEmpty ? <String>[] : [decoded];
+  }
+
+  List<List<List<List<double>>>> _preprocess(imglib.Image image) {
+    final resized = imglib.copyResize(
+      image,
+      width: _inputWidth,
+      height: _inputHeight,
+      interpolation: imglib.Interpolation.average,
+    );
+
+    final input = List.generate(
+      1,
+      (_) => List.generate(
+        _inputHeight,
+        (y) => List.generate(
+          _inputWidth,
+          (x) {
+            final pixel = resized.getPixel(x, y);
+            final r = imglib.getRed(pixel) / 255.0;
+            final g = imglib.getGreen(pixel) / 255.0;
+            final b = imglib.getBlue(pixel) / 255.0;
+            return [r, g, b];
+          },
+        ),
+      ),
+    );
+
+    return input;
+  }
+
+  String _decode(List<List<double>> logits) {
+    if (logits.isEmpty) return '';
+    final blankIndex = logits.first.length - 1;
+    final buffer = StringBuffer();
+    int prev = -1;
+
+    for (final timestep in logits) {
+      var maxIndex = 0;
+      var maxScore = timestep[0];
+      for (int i = 1; i < timestep.length; i++) {
+        if (timestep[i] > maxScore) {
+          maxScore = timestep[i];
+          maxIndex = i;
+        }
+      }
+
+      if (maxIndex == blankIndex || maxIndex == prev) continue;
+      prev = maxIndex;
+
+      if (maxIndex < _charset.length) {
+        buffer.write(_charset[maxIndex]);
+      } else {
+        buffer.write('?');
+      }
+    }
+
+    return buffer.toString().trim().toUpperCase();
   }
 }
