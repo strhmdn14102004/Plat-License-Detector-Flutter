@@ -13,6 +13,8 @@ class PlateCameraCaptureState {
   final String? lastText;
   final Uint8List? preview;
   final CameraController? controller;
+  final double brightness;
+  final double contrast;
 
   const PlateCameraCaptureState({
     required this.isReady,
@@ -22,6 +24,8 @@ class PlateCameraCaptureState {
     required this.lastText,
     required this.preview,
     required this.controller,
+    required this.brightness,
+    required this.contrast,
   });
 
   factory PlateCameraCaptureState.initial() => const PlateCameraCaptureState(
@@ -32,6 +36,8 @@ class PlateCameraCaptureState {
     lastText: null,
     preview: null,
     controller: null,
+    brightness: 0.05,
+    contrast: 1.25,
   );
 
   PlateCameraCaptureState copyWith({
@@ -42,6 +48,8 @@ class PlateCameraCaptureState {
     Object? lastText = _sentinel,
     Object? preview = _sentinel,
     Object? controller = _sentinel,
+    double? brightness,
+    double? contrast,
   }) {
     final String? nextMessage = identical(message, _sentinel)
         ? this.message
@@ -64,6 +72,8 @@ class PlateCameraCaptureState {
       lastText: nextLastText,
       preview: nextPreview,
       controller: nextController,
+      brightness: brightness ?? this.brightness,
+      contrast: contrast ?? this.contrast,
     );
   }
 }

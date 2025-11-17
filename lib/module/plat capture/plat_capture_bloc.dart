@@ -27,6 +27,20 @@ class PlateCameraCaptureBloc
     on<CapturePhoto>(_onCapture);
     on<ResetCamera>(_onReset);
     on<DisposeCamera>(_onDispose);
+    on<UpdateEnhancement>(_onUpdateEnhancement);
+  }
+
+  void _onUpdateEnhancement(
+    UpdateEnhancement ev,
+    Emitter<PlateCameraCaptureState> emit,
+  ) {
+    emit(
+      state.copyWith(
+        brightness: ev.brightness,
+        contrast: ev.contrast,
+        message: state.isProcessing ? state.message : '🔆 Penyesuaian gambar aktif',
+      ),
+    );
   }
 
   Future<void> _onInit(
@@ -180,9 +194,16 @@ class PlateCameraCaptureBloc
         ),
       );
 
+      final enhanced = applyEnhancementToJpeg(
+        cropped,
+        brightness: state.brightness,
+        contrast: state.contrast,
+        aggressive: true,
+      );
+
       final text = await waitForOcrResult(
         ocr,
-        cropped,
+        enhanced,
         timeout: const Duration(seconds: 5),
       );
       emit(
