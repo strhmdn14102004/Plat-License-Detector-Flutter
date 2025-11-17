@@ -99,6 +99,17 @@ class YoloIsolatePool {
       w.isolate.kill(priority: Isolate.immediate);
     }
     _workers.clear();
+    _initialized = false;
+    _nextIndex = 0;
+  }
+
+  Future<void> reload(
+    Uint8List modelBytes,
+    int inputSize,
+    double threshold,
+  ) async {
+    dispose();
+    await init(modelBytes, inputSize, threshold);
   }
 
   static void _entry(Map<String, dynamic> args) {
