@@ -4,14 +4,25 @@ import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:path/path.dart' as p;
 import 'package:vehicle_identification_number/module/home/view_data_page.dart';
 import 'package:vehicle_identification_number/module/lens_selector/lens_selector_page.dart';
 import 'package:vehicle_identification_number/module/plat%20capture/plat_capture_page.dart';
 import 'package:vehicle_identification_number/module/plat%20gallery/plat_gallery_page.dart';
 import 'package:vehicle_identification_number/module/plat%20realtime/plat_realtime_page.dart';
+import 'package:vehicle_identification_number/service/model_manager.dart';
+import 'package:vehicle_identification_number/service/yolo_isolate_pool.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  final YoloIsolatePool yoloPool;
+  final ModelManager modelManager;
+
+  const HomePage({
+    super.key,
+    required this.yoloPool,
+    required this.modelManager,
+  });
   @override
   State<HomePage> createState() => _HomePageState();
 }
@@ -19,6 +30,8 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   late final AnimationController _glowCtl;
   late final Animation<double> _glowAnim;
+  String? _currentModelPath;
+  bool _isSwitchingModel = false;
 
   @override
   void initState() {
@@ -31,12 +44,63 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       begin: 0.7,
       end: 1.2,
     ).animate(CurvedAnimation(parent: _glowCtl, curve: Curves.easeInOut));
+    _currentModelPath = widget.modelManager.customModelPath;
   }
 
   @override
   void dispose() {
     _glowCtl.dispose();
     super.dispose();
+  }
+
+  void _showSnack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  Future<void> _loadDefaultModel({String? fallbackMessage}) async {
+    final defaultBytes = await widget.modelManager.loadDefaultModelBytes();
+    await widget.yoloPool.reload(defaultBytes, 640, 0.5);
+    await widget.modelManager.clearCustomModelPath();
+    setState(() => _currentModelPath = null);
+
+    if (fallbackMessage != null) _showSnack(fallbackMessage);
+  }
+
+  Future<void> _pickCustomModel() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['tflite'],
+      withData: false,
+    );
+
+    if (result == null || result.files.single.path == null) return;
+
+    setState(() => _isSwitchingModel = true);
+    final pickedPath = result.files.single.path!;
+
+    try {
+      final customBytes = await widget.modelManager.tryLoadCustomModel(pickedPath);
+      if (customBytes == null) {
+        await _loadDefaultModel(
+          fallbackMessage: 'Model tidak valid, kembali ke model bawaan.',
+        );
+        return;
+      }
+
+      await widget.yoloPool.reload(customBytes, 640, 0.5);
+      await widget.modelManager.setCustomModelPath(pickedPath);
+      setState(() => _currentModelPath = pickedPath);
+      _showSnack('Model kustom berhasil diaktifkan.');
+    } catch (e) {
+      await _loadDefaultModel(
+        fallbackMessage: 'Gagal memuat model kustom, memakai model bawaan.',
+      );
+    } finally {
+      if (mounted) setState(() => _isSwitchingModel = false);
+    }
   }
 
   @override
@@ -103,6 +167,70 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                               height: 1.35,
                             ),
                           ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _GlassCard(
+                    padding: const EdgeInsets.all(18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.swap_horiz_rounded,
+                              color: Colors.lightBlueAccent,
+                              size: 28,
+                            ),
+                            const SizedBox(width: 10),
+                            const Text(
+                              'Model Deteksi',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const Spacer(),
+                            if (_isSwitchingModel)
+                              const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          _currentModelPath != null
+                              ? 'Model aktif: ${p.basename(_currentModelPath!)}'
+                              : 'Model aktif: Bawaan aplikasi',
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 13.5,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 10,
+                          runSpacing: 10,
+                          children: [
+                            ElevatedButton.icon(
+                              onPressed: _isSwitchingModel ? null : _pickCustomModel,
+                              icon: const Icon(Icons.file_present_rounded),
+                              label: const Text('Pilih Model Kustom (.tflite)'),
+                            ),
+                            OutlinedButton.icon(
+                              onPressed: _isSwitchingModel || _currentModelPath == null
+                                  ? null
+                                  : () => _loadDefaultModel(
+                                        fallbackMessage: 'Kembali menggunakan model bawaan.',
+                                      ),
+                              icon: const Icon(Icons.refresh_rounded),
+                              label: const Text('Gunakan Model Default'),
+                            ),
+                          ],
                         ),
                       ],
                     ),

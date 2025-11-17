@@ -9,17 +9,17 @@ import 'package:vehicle_identification_number/module/plat%20gallery/plat_gallery
 import 'package:vehicle_identification_number/module/plat%20gallery/plat_gallery_page.dart';
 import 'package:vehicle_identification_number/module/plat%20realtime/plat_realtime_bloc.dart';
 import 'package:vehicle_identification_number/service/ocr_isolate_pool.dart';
+import 'package:vehicle_identification_number/service/model_manager.dart';
 import 'package:vehicle_identification_number/service/yolo_isolate_pool.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
   await Hive.openBox('plates');
+  final settingsBox = await Hive.openBox(ModelManager.settingsBoxName);
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-  final modelBytes = await rootBundle.load(
-    'assets/models/license_plate_detector_float16.tflite',
-  );
-  final bytes = modelBytes.buffer.asUint8List();
+  final modelManager = ModelManager(settingsBox);
+  final bytes = await modelManager.loadInitialModelBytes();
 
   final yoloPool = YoloIsolatePool();
   await yoloPool.init(bytes, 640, 0.5);
@@ -27,14 +27,26 @@ void main() async {
   final ocrPool = OcrIsolatePool();
   ocrPool.start();
 
-  runApp(MyApp(yoloPool: yoloPool, ocrPool: ocrPool));
+  runApp(
+    MyApp(
+      yoloPool: yoloPool,
+      ocrPool: ocrPool,
+      modelManager: modelManager,
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
   final YoloIsolatePool yoloPool;
   final OcrIsolatePool ocrPool;
+  final ModelManager modelManager;
 
-  const MyApp({super.key, required this.yoloPool, required this.ocrPool});
+  const MyApp({
+    super.key,
+    required this.yoloPool,
+    required this.ocrPool,
+    required this.modelManager,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -65,7 +77,10 @@ class MyApp extends StatelessWidget {
             elevation: 0,
           ),
         ),
-        home: const HomePage(),
+        home: HomePage(
+          yoloPool: yoloPool,
+          modelManager: modelManager,
+        ),
       ),
     );
   }
