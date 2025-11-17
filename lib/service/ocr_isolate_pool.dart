@@ -1,7 +1,4 @@
-// ignore_for_file: body_might_complete_normally_catch_error
-
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as imglib;
@@ -328,8 +325,10 @@ class _PaddleOcrRecognizer {
     final preprocessed = _preprocess(image);
     final output = List.generate(
       1,
-      (_) =>
-          List.generate(_outputSeqLen, (_) => List.filled(_charset.length + 1, 0.0)),
+      (_) => List.generate(
+        _outputSeqLen,
+        (_) => List.filled(_charset.length + 1, 0.0),
+      ),
     );
 
     _interpreter!.run(preprocessed, output);
@@ -350,16 +349,15 @@ class _PaddleOcrRecognizer {
       1,
       (_) => List.generate(
         _inputHeight,
-        (y) => List.generate(
-          _inputWidth,
-          (x) {
-            final pixel = resized.getPixel(x, y);
-            final r = imglib.getRed(pixel) / 255.0;
-            final g = imglib.getGreen(pixel) / 255.0;
-            final b = imglib.getBlue(pixel) / 255.0;
-            return [r, g, b];
-          },
-        ),
+        (y) => List.generate(_inputWidth, (x) {
+          final pixel = resized.getPixel(x, y);
+
+          final r = (pixel.r).toInt();
+          final g = (pixel.g).toInt();
+          final b = (pixel.b).toInt();
+
+          return [r / 255.0, g / 255.0, b / 255.0];
+        }),
       ),
     );
 
