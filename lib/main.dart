@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -27,14 +29,26 @@ void main() async {
   final ocrPool = OcrIsolatePool();
   ocrPool.start();
 
-  runApp(MyApp(yoloPool: yoloPool, ocrPool: ocrPool));
+  runApp(
+    MyApp(
+      yoloPool: yoloPool,
+      ocrPool: ocrPool,
+      defaultModelBytes: bytes,
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
   final YoloIsolatePool yoloPool;
   final OcrIsolatePool ocrPool;
+  final Uint8List defaultModelBytes;
 
-  const MyApp({super.key, required this.yoloPool, required this.ocrPool});
+  const MyApp({
+    super.key,
+    required this.yoloPool,
+    required this.ocrPool,
+    required this.defaultModelBytes,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -65,7 +79,10 @@ class MyApp extends StatelessWidget {
             elevation: 0,
           ),
         ),
-        home: const HomePage(),
+        home: HomePage(
+          yoloPool: yoloPool,
+          defaultModelBytes: defaultModelBytes,
+        ),
       ),
     );
   }

@@ -38,8 +38,14 @@ class YoloIsolatePool {
     Uint8List modelBytes,
     int inputSize,
     double threshold,
+    {bool force = false},
   ) async {
-    if (_initialized) return;
+    if (_initialized && !force) return;
+
+    if (force) {
+      dispose();
+      _nextIndex = 0;
+    }
 
     for (int i = 0; i < numWorkers; i++) {
       final ready = Completer<void>();
@@ -99,6 +105,7 @@ class YoloIsolatePool {
       w.isolate.kill(priority: Isolate.immediate);
     }
     _workers.clear();
+    _initialized = false;
   }
 
   static void _entry(Map<String, dynamic> args) {
