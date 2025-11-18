@@ -331,10 +331,7 @@ class _PaddleOcrRecognizer {
 
     final output = List.generate(
       outputShape.first,
-      (_) => List.generate(
-        outputSteps,
-        (_) => List.filled(outputClasses, 0.0),
-      ),
+      (_) => List.generate(outputSteps, (_) => List.filled(outputClasses, 0.0)),
     );
 
     _interpreter!.run(preprocessed, output);

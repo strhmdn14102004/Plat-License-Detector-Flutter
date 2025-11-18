@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -29,13 +27,7 @@ void main() async {
   final ocrPool = OcrIsolatePool();
   ocrPool.start();
 
-  runApp(
-    MyApp(
-      yoloPool: yoloPool,
-      ocrPool: ocrPool,
-      defaultModelBytes: bytes,
-    ),
-  );
+  runApp(MyApp(yoloPool: yoloPool, ocrPool: ocrPool, defaultModelBytes: bytes));
 }
 
 class MyApp extends StatelessWidget {
