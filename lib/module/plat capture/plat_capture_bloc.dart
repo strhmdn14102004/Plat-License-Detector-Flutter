@@ -112,7 +112,7 @@ class PlateCameraCaptureBloc
           : fixed;
 
       final fullJpg = Uint8List.fromList(
-        imglib.encodeJpg(upright, quality: 95),
+        imglib.encodeJpg(upright, quality: 100),
       );
 
       emit(

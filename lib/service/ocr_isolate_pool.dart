@@ -45,7 +45,7 @@ class OcrIsolatePool {
       final tmp = await getTemporaryDirectory();
       final file = File(
         p.join(tmp.path, 'ocr_${now.millisecondsSinceEpoch}.jpg'),
-      )..writeAsBytesSync(imglib.encodeJpg(img, quality: 90), flush: true);
+      )..writeAsBytesSync(imglib.encodeJpg(img, quality: 100), flush: true);
 
       final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
       final input = InputImage.fromFile(file);

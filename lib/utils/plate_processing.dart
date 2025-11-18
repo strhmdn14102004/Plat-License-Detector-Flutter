@@ -62,7 +62,7 @@ Future<Uint8List?> cropPlateRegion(
   Uint8List jpeg,
   Rect rect, {
   double marginFactor = 0.2,
-  int quality = 95,
+  int quality = 100
 }) async {
   return compute(_cropPlateRegion, {
     'jpeg': jpeg,
@@ -81,7 +81,7 @@ Uint8List? cropPlateRegionSync(
   Uint8List jpeg,
   Rect rect, {
   double marginFactor = 0.2,
-  int quality = 95,
+  int quality = 100,
 }) {
   return _cropPlateRegion({
     'jpeg': jpeg,
@@ -101,7 +101,7 @@ Uint8List? _cropPlateRegion(Map<String, dynamic> args) {
     final jpeg = args['jpeg'] as Uint8List;
     final Float64List data = args['rect'] as Float64List;
     final double margin = (args['margin'] as double?) ?? 0.0;
-    final int quality = (args['quality'] as int?) ?? 95;
+    final int quality = (args['quality'] as int?) ?? 100;
 
     final imglib.Image? img = imglib.decodeImage(jpeg);
     if (img == null) return null;
