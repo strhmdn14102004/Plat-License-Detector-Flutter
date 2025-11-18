@@ -189,10 +189,8 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
   Future<void> _showResult(BuildContext context, String text) async {
     final outerContext = context;
     final normalized = text.trim();
-    final canSave =
-        normalized.isNotEmpty &&
-        normalized.toLowerCase() != 'tidak terbaca' &&
-        normalized.toLowerCase() != 'error';
+    final textController = TextEditingController(text: normalized);
+    final focusNode = FocusNode();
 
     await showModalBottomSheet(
       context: context,
@@ -203,94 +201,141 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
       builder: (ctx) {
         final box = Hive.box('plates');
         final existing = List<String>.from(box.get('data', defaultValue: []));
-        final alreadySaved = existing.contains(normalized);
+        return ValueListenableBuilder<TextEditingValue>(
+          valueListenable: textController,
+          builder: (context, value, _) {
+            final current = value.text.trim();
+            final canCurrentSave = current.isNotEmpty &&
+                current.toLowerCase() != 'tidak terbaca' &&
+                current.toLowerCase() != 'error';
+            final normalizedCurrent = current.toUpperCase();
+            final alreadySaved = existing.contains(normalizedCurrent);
 
-        return Padding(
-          padding: const EdgeInsets.all(20),
-          child: Wrap(
-            children: [
-              Center(
-                child: Container(
-                  height: 4,
-                  width: 40,
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const Center(
-                child: Text(
-                  'Plat Terbaca',
-                  style: TextStyle(color: Colors.white70, fontSize: 16),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Center(
-                child: Text(
-                  normalized,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 22),
-              Row(
+            return Padding(
+              padding: const EdgeInsets.all(20),
+              child: Wrap(
                 children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      icon: const Icon(Icons.save, color: Colors.white),
-                      label: Text(
-                        alreadySaved ? 'Sudah Tersimpan' : 'Simpan',
-                        style: const TextStyle(color: Colors.white),
+                  Center(
+                    child: Container(
+                      height: 4,
+                      width: 40,
+                      margin: const EdgeInsets.only(bottom: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white24,
+                        borderRadius: BorderRadius.circular(2),
                       ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: canSave && !alreadySaved
-                            ? Colors.green
-                            : Colors.white12,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      onPressed: (!canSave || alreadySaved)
-                          ? null
-                          : () async {
-                              existing.add(normalized);
-                              await box.put('data', existing);
-                              if (mounted) {
-                                Navigator.pop(ctx);
-                                ScaffoldMessenger.of(outerContext).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Plat $normalized disimpan'),
-                                  ),
-                                );
-                              }
-                            },
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      icon: const Icon(Icons.close, color: Colors.white70),
-                      label: const Text(
-                        'Tutup',
-                        style: TextStyle(color: Colors.white70),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Colors.white24, width: 1),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      onPressed: () => Navigator.pop(ctx),
+                  const Center(
+                    child: Text(
+                      'Plat Terbaca',
+                      style: TextStyle(color: Colors.white70, fontSize: 16),
                     ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: textController,
+                    focusNode: focusNode,
+                    autofocus: true,
+                    textAlign: TextAlign.center,
+                    textCapitalization: TextCapitalization.characters,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.4,
+                    ),
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: Colors.white.withOpacity(0.06),
+                      hintText: 'Masukkan plat',
+                      hintStyle: const TextStyle(color: Colors.white38),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: const BorderSide(color: Colors.white24),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: const BorderSide(color: Colors.white24),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: const BorderSide(color: Colors.tealAccent),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 14,
+                      ),
+                      helperText:
+                          'Edit jika ada huruf/angka yang kurang tepat sebelum menyimpan',
+                      helperStyle: const TextStyle(
+                        color: Colors.white54,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 22),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          icon: const Icon(Icons.save, color: Colors.white),
+                          label: Text(
+                            alreadySaved ? 'Sudah Tersimpan' : 'Simpan',
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: canCurrentSave && !alreadySaved
+                                ? Colors.green
+                                : Colors.white12,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                          onPressed: (!canCurrentSave || alreadySaved)
+                              ? null
+                              : () async {
+                                  final toSave = normalizedCurrent;
+                                  existing.add(toSave);
+                                  await box.put('data', existing);
+                                  if (mounted) {
+                                    Navigator.pop(ctx);
+                                    ScaffoldMessenger.of(outerContext)
+                                        .showSnackBar(
+                                      SnackBar(
+                                        content:
+                                            Text('Plat $toSave disimpan'),
+                                      ),
+                                    );
+                                  }
+                                },
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.close, color: Colors.white70),
+                          label: const Text(
+                            'Tutup',
+                            style: TextStyle(color: Colors.white70),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side:
+                                const BorderSide(color: Colors.white24, width: 1),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
+
+    textController.dispose();
+    focusNode.dispose();
   }
 }
