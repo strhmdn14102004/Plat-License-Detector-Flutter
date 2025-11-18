@@ -6,13 +6,6 @@ import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as imglib;
 import 'package:vehicle_identification_number/service/ocr_isolate_pool.dart';
 
-class DeskewResult {
-  final Uint8List image;
-  final double angle;
-
-  const DeskewResult({required this.image, required this.angle});
-}
-
 const int kYoloInputSize = 640;
 
 Rect expandRectWithinBounds(
@@ -69,7 +62,7 @@ Future<Uint8List?> cropPlateRegion(
   Uint8List jpeg,
   Rect rect, {
   double marginFactor = 0.2,
-  int quality = 100,
+  int quality = 100
 }) async {
   return compute(_cropPlateRegion, {
     'jpeg': jpeg,
@@ -139,90 +132,4 @@ Uint8List? _cropPlateRegion(Map<String, dynamic> args) {
     debugPrint('❌ cropPlateRegion error: $e');
     return null;
   }
-}
-
-Future<DeskewResult?> deskewPlate(
-  Uint8List jpeg, {
-  double maxAngleDegrees = 12,
-  int quality = 100,
-}) async {
-  return compute(_deskewPlate, {
-    'jpeg': jpeg,
-    'maxAngle': maxAngleDegrees,
-    'quality': quality,
-  });
-}
-
-DeskewResult? _deskewPlate(Map<String, dynamic> args) {
-  try {
-    final Uint8List jpeg = args['jpeg'] as Uint8List;
-    final double maxAngle = (args['maxAngle'] as double?) ?? 12.0;
-    final int quality = (args['quality'] as int?) ?? 100;
-
-    final imglib.Image? decoded = imglib.decodeImage(jpeg);
-    if (decoded == null) return null;
-
-    final imglib.Image working = decoded.width > 900
-        ? imglib.copyResize(decoded, width: 900)
-        : decoded.clone();
-
-    final double angle = _estimateSkewAngle(working, maxAngleDegrees: maxAngle);
-    if (angle.abs() < 0.4) {
-      return DeskewResult(image: jpeg, angle: 0);
-    }
-
-    final imglib.Image rotated = imglib.copyRotate(decoded, angle: -angle);
-
-    return DeskewResult(
-      image: Uint8List.fromList(imglib.encodeJpg(rotated, quality: quality)),
-      angle: angle,
-    );
-  } catch (e) {
-    debugPrint('❌ deskewPlate error: $e');
-    return null;
-  }
-}
-
-double _estimateSkewAngle(imglib.Image source, {double maxAngleDegrees = 12}) {
-  final imglib.Image gray = imglib.grayscale(source);
-
-  final int width = gray.width;
-  final int height = gray.height;
-  if (width < 3 || height < 3) return 0;
-
-  double weightedAngle = 0;
-  double weightSum = 0;
-
-  for (int y = 1; y < height - 1; y++) {
-    for (int x = 1; x < width - 1; x++) {
-      final num gx =
-          (-imglib.getLuminance(gray.getPixel(x - 1, y - 1))) +
-          (imglib.getLuminance(gray.getPixel(x + 1, y - 1))) +
-          (-2 * imglib.getLuminance(gray.getPixel(x - 1, y))) +
-          (2 * imglib.getLuminance(gray.getPixel(x + 1, y))) +
-          (-imglib.getLuminance(gray.getPixel(x - 1, y + 1))) +
-          (imglib.getLuminance(gray.getPixel(x + 1, y + 1)));
-
-      final num gy =
-          (-imglib.getLuminance(gray.getPixel(x - 1, y - 1))) +
-          (-2 * imglib.getLuminance(gray.getPixel(x, y - 1))) +
-          (-imglib.getLuminance(gray.getPixel(x + 1, y - 1))) +
-          (imglib.getLuminance(gray.getPixel(x - 1, y + 1))) +
-          (2 * imglib.getLuminance(gray.getPixel(x, y + 1))) +
-          (imglib.getLuminance(gray.getPixel(x + 1, y + 1)));
-
-      final double magnitude = math.sqrt((gx * gx + gy * gy).toDouble());
-      if (magnitude < 30) continue;
-
-      final double angle =
-          math.atan2(gy.toDouble(), gx.toDouble()) * 180 / math.pi;
-      if (angle.abs() > maxAngleDegrees) continue;
-
-      weightedAngle += angle * magnitude;
-      weightSum += magnitude;
-    }
-  }
-
-  if (weightSum == 0) return 0;
-  return weightedAngle / weightSum;
 }

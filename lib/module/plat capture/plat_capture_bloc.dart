@@ -159,7 +159,6 @@ class PlateCameraCaptureBloc
           progress: 0.55,
           message: '✂️ Memotong area plat kendaraan...',
           preview: fullJpg,
-          deskewTurns: 0,
         ),
       );
 
@@ -183,73 +182,28 @@ class PlateCameraCaptureBloc
 
       emit(
         state.copyWith(
-          progress: 0.68,
-          message: '📐 Meluruskan sudut plat...',
+          progress: 0.75,
+          message: '🧠 Memproses...',
           preview: cropped,
-          deskewTurns: 0,
         ),
       );
 
-      final DeskewResult? deskewResult = await deskewPlate(
-        cropped,
-        maxAngleDegrees: 14,
-        quality: 95,
-      );
-
-      Uint8List normalizedCrop = cropped;
-      double appliedAngle = 0;
-
-      if (deskewResult != null && deskewResult.angle.abs() > 0.4) {
-        appliedAngle = deskewResult.angle;
-
-        emit(
-          state.copyWith(
-            progress: 0.73,
-            message:
-                '📐 Menyesuaikan sudut (${appliedAngle.toStringAsFixed(1)}°)...',
-            preview: cropped,
-            deskewTurns: appliedAngle / 360,
-          ),
-        );
-
-        await Future.delayed(const Duration(milliseconds: 180));
-
-        normalizedCrop = deskewResult.image;
-        emit(
-          state.copyWith(
-            progress: 0.78,
-            message: '🧭 Plat diluruskan, memulai OCR...',
-            preview: normalizedCrop,
-            deskewTurns: 0,
-          ),
-        );
-      } else {
-        emit(
-          state.copyWith(
-            progress: 0.78,
-            message: '🧠 Memproses...',
-            preview: normalizedCrop,
-            deskewTurns: 0,
-          ),
-        );
-      }
-
       final text = await waitForOcrResult(
         ocr,
-        normalizedCrop,
+        cropped,
         timeout: const Duration(seconds: 5),
       );
-        emit(
-          state.copyWith(
-            isProcessing: false,
-            progress: 1.0,
-            message: text.isEmpty
-                ? '⚠️Plat Tidak terbaca, coba ubah angle\natau cari pencahayaan yang baik'
-                : '✅ Plat: $text',
-            lastText: text.isEmpty ? 'Tidak terbaca' : text,
-            preview: normalizedCrop,
-          ),
-        );
+      emit(
+        state.copyWith(
+          isProcessing: false,
+          progress: 1.0,
+          message: text.isEmpty
+              ? '⚠️Plat Tidak terbaca, coba ubah angle\natau cari pencahayaan yang baik'
+              : '✅ Plat: $text',
+          lastText: text.isEmpty ? 'Tidak terbaca' : text,
+          preview: cropped,
+        ),
+      );
     } catch (e, st) {
       debugPrint("❌ Capture error: $e\n$st");
       emit(
