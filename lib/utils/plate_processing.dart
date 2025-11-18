@@ -69,7 +69,7 @@ Future<Uint8List?> cropPlateRegion(
   Uint8List jpeg,
   Rect rect, {
   double marginFactor = 0.2,
-  int quality = 100
+  int quality = 100,
 }) async {
   return compute(_cropPlateRegion, {
     'jpeg': jpeg,
@@ -171,10 +171,7 @@ DeskewResult? _deskewPlate(Map<String, dynamic> args) {
       return DeskewResult(image: jpeg, angle: 0);
     }
 
-    final imglib.Image rotated = imglib.copyRotate(
-      decoded,
-      angle: -angle,
-    );
+    final imglib.Image rotated = imglib.copyRotate(decoded, angle: -angle);
 
     return DeskewResult(
       image: Uint8List.fromList(imglib.encodeJpg(rotated, quality: quality)),
@@ -186,10 +183,7 @@ DeskewResult? _deskewPlate(Map<String, dynamic> args) {
   }
 }
 
-double _estimateSkewAngle(
-  imglib.Image source, {
-  double maxAngleDegrees = 12,
-}) {
+double _estimateSkewAngle(imglib.Image source, {double maxAngleDegrees = 12}) {
   final imglib.Image gray = imglib.grayscale(source);
 
   final int width = gray.width;
@@ -201,26 +195,27 @@ double _estimateSkewAngle(
 
   for (int y = 1; y < height - 1; y++) {
     for (int x = 1; x < width - 1; x++) {
-      final int gx =
+      final num gx =
           (-imglib.getLuminance(gray.getPixel(x - 1, y - 1))) +
-              (imglib.getLuminance(gray.getPixel(x + 1, y - 1))) +
-              (-2 * imglib.getLuminance(gray.getPixel(x - 1, y))) +
-              (2 * imglib.getLuminance(gray.getPixel(x + 1, y))) +
-              (-imglib.getLuminance(gray.getPixel(x - 1, y + 1))) +
-              (imglib.getLuminance(gray.getPixel(x + 1, y + 1)));
+          (imglib.getLuminance(gray.getPixel(x + 1, y - 1))) +
+          (-2 * imglib.getLuminance(gray.getPixel(x - 1, y))) +
+          (2 * imglib.getLuminance(gray.getPixel(x + 1, y))) +
+          (-imglib.getLuminance(gray.getPixel(x - 1, y + 1))) +
+          (imglib.getLuminance(gray.getPixel(x + 1, y + 1)));
 
-      final int gy =
+      final num gy =
           (-imglib.getLuminance(gray.getPixel(x - 1, y - 1))) +
-              (-2 * imglib.getLuminance(gray.getPixel(x, y - 1))) +
-              (-imglib.getLuminance(gray.getPixel(x + 1, y - 1))) +
-              (imglib.getLuminance(gray.getPixel(x - 1, y + 1))) +
-              (2 * imglib.getLuminance(gray.getPixel(x, y + 1))) +
-              (imglib.getLuminance(gray.getPixel(x + 1, y + 1)));
+          (-2 * imglib.getLuminance(gray.getPixel(x, y - 1))) +
+          (-imglib.getLuminance(gray.getPixel(x + 1, y - 1))) +
+          (imglib.getLuminance(gray.getPixel(x - 1, y + 1))) +
+          (2 * imglib.getLuminance(gray.getPixel(x, y + 1))) +
+          (imglib.getLuminance(gray.getPixel(x + 1, y + 1)));
 
       final double magnitude = math.sqrt((gx * gx + gy * gy).toDouble());
       if (magnitude < 30) continue;
 
-      final double angle = math.atan2(gy.toDouble(), gx.toDouble()) * 180 / math.pi;
+      final double angle =
+          math.atan2(gy.toDouble(), gx.toDouble()) * 180 / math.pi;
       if (angle.abs() > maxAngleDegrees) continue;
 
       weightedAngle += angle * magnitude;
@@ -231,4 +226,3 @@ double _estimateSkewAngle(
   if (weightSum == 0) return 0;
   return weightedAngle / weightSum;
 }
-
