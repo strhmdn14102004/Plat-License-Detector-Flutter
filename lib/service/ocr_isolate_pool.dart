@@ -1,14 +1,15 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter_tesseract_ocr/flutter_tesseract_ocr.dart';
 import 'package:image/image.dart' as imglib;
-import 'package:tflite_flutter/tflite_flutter.dart';
 
 class OcrIsolatePool {
   final _queue = StreamController<Uint8List>();
   bool _running = false;
   DateTime _lastProcessed = DateTime.fromMillisecondsSinceEpoch(0);
-  final _recognizer = _PaddleOcrRecognizer();
+  final _recognizer = _TesseractRecognizer();
 
   final _onResult = StreamController<String>.broadcast();
   Stream<String> get results => _onResult.stream;
@@ -206,196 +207,21 @@ class OcrIsolatePool {
   }
 }
 
-class _PaddleOcrRecognizer {
-  static const int _inputWidth = 320;
-  static const int _inputHeight = 48;
-  static const int _outputSeqLen = 40;
-
-  static const List<String> _charset = [
-    ' ',
-    '!',
-    '"',
-    '#',
-    '\$',
-    '%',
-    '&',
-    "'",
-    '(',
-    ')',
-    '*',
-    '+',
-    ',',
-    '-',
-    '.',
-    '/',
-    '0',
-    '1',
-    '2',
-    '3',
-    '4',
-    '5',
-    '6',
-    '7',
-    '8',
-    '9',
-    ':',
-    ';',
-    '<',
-    '=',
-    '>',
-    '?',
-    '@',
-    'A',
-    'B',
-    'C',
-    'D',
-    'E',
-    'F',
-    'G',
-    'H',
-    'I',
-    'J',
-    'K',
-    'L',
-    'M',
-    'N',
-    'O',
-    'P',
-    'Q',
-    'R',
-    'S',
-    'T',
-    'U',
-    'V',
-    'W',
-    'X',
-    'Y',
-    'Z',
-    '[',
-    '\\',
-    ']',
-    '^',
-    '_',
-    '`',
-    'a',
-    'b',
-    'c',
-    'd',
-    'e',
-    'f',
-    'g',
-    'h',
-    'i',
-    'j',
-    'k',
-    'l',
-    'm',
-    'n',
-    'o',
-    'p',
-    'q',
-    'r',
-    's',
-    't',
-    'u',
-    'v',
-    'w',
-    'x',
-    'y',
-    'z',
-    '{',
-    '|',
-    '}',
-    '~',
-    '§',
-  ];
-
-  Interpreter? _interpreter;
-
-  Future<void> _ensureInterpreter() async {
-    _interpreter ??= await Interpreter.fromAsset(
-      'assets/models/rec_model_float16.tflite',
-      options: InterpreterOptions()..threads = 2,
-    );
-  }
-
+class _TesseractRecognizer {
   Future<List<String>> recognize(imglib.Image image) async {
-    await _ensureInterpreter();
+    final bytes = Uint8List.fromList(imglib.encodeJpg(image));
 
-    final preprocessed = _preprocess(image);
-
-    final outputTensor = _interpreter!.getOutputTensor(0);
-    final outputShape = outputTensor.shape;
-    final outputClasses = outputShape.last;
-    final outputSteps = outputShape.length > 1 ? outputShape[1] : _outputSeqLen;
-
-    final output = List.generate(
-      outputShape.first,
-      (_) => List.generate(outputSteps, (_) => List.filled(outputClasses, 0.0)),
+    final text = await FlutterTesseractOcr.extractTextFromBytes(
+      bytes,
+      language: 'eng',
     );
 
-    _interpreter!.run(preprocessed, output);
+    if (text.isEmpty) return <String>[];
 
-    final decoded = _decode(output[0]);
-    return decoded.isEmpty ? <String>[] : [decoded];
-  }
-
-  List<List<List<List<double>>>> _preprocess(imglib.Image image) {
-    final resized = imglib.copyResize(
-      image,
-      width: _inputWidth,
-      height: _inputHeight,
-      interpolation: imglib.Interpolation.average,
-    );
-
-    final input = List.generate(
-      1,
-      (_) => List.generate(
-        _inputHeight,
-        (y) => List.generate(_inputWidth, (x) {
-          final pixel = resized.getPixel(x, y);
-
-          const mean = 0.5;
-          const std = 0.5;
-
-          final r = ((pixel.r / 255.0) - mean) / std;
-          final g = ((pixel.g / 255.0) - mean) / std;
-          final b = ((pixel.b / 255.0) - mean) / std;
-
-          return [r, g, b];
-        }),
-      ),
-    );
-
-    return input;
-  }
-
-  String _decode(List<List<double>> logits) {
-    if (logits.isEmpty) return '';
-    final blankIndex = logits.first.length - 1;
-    final buffer = StringBuffer();
-    int prev = -1;
-
-    for (final timestep in logits) {
-      var maxIndex = 0;
-      var maxScore = timestep[0];
-      for (int i = 1; i < timestep.length; i++) {
-        if (timestep[i] > maxScore) {
-          maxScore = timestep[i];
-          maxIndex = i;
-        }
-      }
-
-      if (maxIndex == blankIndex || maxIndex == prev) continue;
-      prev = maxIndex;
-
-      if (maxIndex < _charset.length) {
-        buffer.write(_charset[maxIndex]);
-      } else {
-        buffer.write('?');
-      }
-    }
-
-    return buffer.toString().trim().toUpperCase();
+    return text
+        .split(RegExp(r'\r?\n'))
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .toList();
   }
 }
