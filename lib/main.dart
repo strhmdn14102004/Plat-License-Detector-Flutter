@@ -27,20 +27,14 @@ void main() async {
   final ocrPool = OcrIsolatePool();
   ocrPool.start();
 
-  runApp(MyApp(yoloPool: yoloPool, ocrPool: ocrPool, defaultModelBytes: bytes));
+  runApp(MyApp(yoloPool: yoloPool, ocrPool: ocrPool));
 }
 
 class MyApp extends StatelessWidget {
   final YoloIsolatePool yoloPool;
   final OcrIsolatePool ocrPool;
-  final Uint8List defaultModelBytes;
 
-  const MyApp({
-    super.key,
-    required this.yoloPool,
-    required this.ocrPool,
-    required this.defaultModelBytes,
-  });
+  const MyApp({super.key, required this.yoloPool, required this.ocrPool});
 
   @override
   Widget build(BuildContext context) {
@@ -71,10 +65,7 @@ class MyApp extends StatelessWidget {
             elevation: 0,
           ),
         ),
-        home: HomePage(
-          yoloPool: yoloPool,
-          defaultModelBytes: defaultModelBytes,
-        ),
+        home: const HomePage(),
       ),
     );
   }

@@ -1,15 +1,18 @@
+// ignore_for_file: body_might_complete_normally_catch_error
+
 import 'dart:async';
-import 'dart:typed_data';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter_tesseract_ocr/flutter_tesseract_ocr.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image/image.dart' as imglib;
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 class OcrIsolatePool {
   final _queue = StreamController<Uint8List>();
   bool _running = false;
   DateTime _lastProcessed = DateTime.fromMillisecondsSinceEpoch(0);
-  final _recognizer = _TesseractRecognizer();
 
   final _onResult = StreamController<String>.broadcast();
   Stream<String> get results => _onResult.stream;
@@ -39,7 +42,24 @@ class OcrIsolatePool {
         img = imglib.gaussianBlur(img, radius: 1);
       }
 
-      final lines = await _recognizer.recognize(img);
+      final tmp = await getTemporaryDirectory();
+      final file = File(
+        p.join(tmp.path, 'ocr_${now.millisecondsSinceEpoch}.jpg'),
+      )..writeAsBytesSync(imglib.encodeJpg(img, quality: 90), flush: true);
+
+      final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
+      final input = InputImage.fromFile(file);
+      final result = await recognizer.processImage(input);
+      await recognizer.close();
+      await file.delete().catchError((_) {});
+
+      final lines = <String>[];
+      for (final block in result.blocks) {
+        for (final line in block.lines) {
+          final txt = line.text.trim().toUpperCase();
+          if (txt.isNotEmpty) lines.add(txt);
+        }
+      }
 
       if (lines.isEmpty) return "";
 
@@ -204,24 +224,5 @@ class OcrIsolatePool {
   void dispose() {
     _queue.close();
     _onResult.close();
-  }
-}
-
-class _TesseractRecognizer {
-  Future<List<String>> recognize(imglib.Image image) async {
-    final bytes = Uint8List.fromList(imglib.encodeJpg(image));
-
-    final text = await FlutterTesseractOcr.extractTextFromBytes(
-      bytes,
-      language: 'eng',
-    );
-
-    if (text.isEmpty) return <String>[];
-
-    return text
-        .split(RegExp(r'\r?\n'))
-        .map((line) => line.trim())
-        .where((line) => line.isNotEmpty)
-        .toList();
   }
 }

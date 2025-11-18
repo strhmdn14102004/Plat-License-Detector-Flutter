@@ -1,29 +1,17 @@
 // ignore_for_file: deprecated_member_use
 
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ui';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:path/path.dart' as p;
-import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:vehicle_identification_number/module/home/view_data_page.dart';
 import 'package:vehicle_identification_number/module/lens_selector/lens_selector_page.dart';
 import 'package:vehicle_identification_number/module/plat%20capture/plat_capture_page.dart';
 import 'package:vehicle_identification_number/module/plat%20gallery/plat_gallery_page.dart';
 import 'package:vehicle_identification_number/module/plat%20realtime/plat_realtime_page.dart';
-import 'package:vehicle_identification_number/service/yolo_isolate_pool.dart';
 
 class HomePage extends StatefulWidget {
-  final YoloIsolatePool yoloPool;
-  final Uint8List defaultModelBytes;
-
-  const HomePage({
-    super.key,
-    required this.yoloPool,
-    required this.defaultModelBytes,
-  });
+  const HomePage({super.key});
   @override
   State<HomePage> createState() => _HomePageState();
 }
@@ -31,8 +19,6 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   late final AnimationController _glowCtl;
   late final Animation<double> _glowAnim;
-  bool _isLoadingModel = false;
-  String _activeModelName = 'Model bawaan (assets)';
 
   @override
   void initState() {
@@ -51,89 +37,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   void dispose() {
     _glowCtl.dispose();
     super.dispose();
-  }
-
-  void _showSnack(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
-  }
-
-  Future<bool> _validateModel(Uint8List bytes) async {
-    try {
-      final interpreter = Interpreter.fromBuffer(bytes);
-      interpreter.close();
-      return true;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  Future<void> _resetToDefaultModel({bool showMessage = false}) async {
-    await widget.yoloPool.init(
-      widget.defaultModelBytes,
-      640,
-      0.5,
-      force: true,
-    );
-
-    if (mounted) {
-      setState(() {
-        _activeModelName = 'Model bawaan (assets)';
-      });
-
-      if (showMessage) {
-        _showSnack('Model tidak valid, kembali menggunakan model bawaan.');
-      }
-    }
-  }
-
-  Future<void> _pickCustomModel() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowMultiple: false,
-      allowedExtensions: const ['tflite'],
-      withData: true,
-    );
-
-    if (result == null) return;
-
-    Uint8List? bytes = result.files.single.bytes;
-    final path = result.files.single.path;
-    final name = result.files.single.name;
-
-    if (bytes == null && path != null && await File(path).exists()) {
-      bytes = await File(path).readAsBytes();
-    }
-
-    if (bytes == null) {
-      await _resetToDefaultModel(showMessage: true);
-      return;
-    }
-
-    setState(() => _isLoadingModel = true);
-
-    final isValid = await _validateModel(bytes);
-
-    if (!isValid) {
-      await _resetToDefaultModel(showMessage: true);
-      if (mounted) setState(() => _isLoadingModel = false);
-      return;
-    }
-
-    try {
-      await widget.yoloPool.init(bytes, 640, 0.5, force: true);
-      if (mounted) {
-        setState(() {
-          _activeModelName = p.basename(name);
-        });
-      }
-      _showSnack('Model kustom berhasil dimuat.');
-    } catch (e) {
-      await _resetToDefaultModel(showMessage: true);
-    } finally {
-      if (mounted) setState(() => _isLoadingModel = false);
-    }
   }
 
   @override
@@ -204,65 +107,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 18),
-
-                  _GlassCard(
-                    padding: const EdgeInsets.all(18),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Model Deteksi Aktif',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 16,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          _activeModelName,
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 13.5,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed:
-                                _isLoadingModel ? null : () => _pickCustomModel(),
-                            icon: _isLoadingModel
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : const Icon(Icons.file_open_rounded),
-                            label: Text(
-                              _isLoadingModel
-                                  ? 'Memuat model...'
-                                  : 'Gunakan model dari perangkat',
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF2563EB),
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 14,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 30),
 
                   const _ShimmerButton(),
                   const SizedBox(height: 18),
