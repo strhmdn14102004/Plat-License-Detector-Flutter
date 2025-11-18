@@ -13,6 +13,7 @@ dependencies:
   flutter_bloc: ^9.1.1
   camera: ^0.11.3
   camerawesome: ^2.4.0
+  flutter_tesseract_ocr: 0.4.30
   tflite_flutter: ^0.12.1
   image: ^4.5.4
   path_provider: ^2.1.5
