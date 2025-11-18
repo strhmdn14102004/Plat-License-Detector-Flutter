@@ -323,11 +323,17 @@ class _PaddleOcrRecognizer {
     await _ensureInterpreter();
 
     final preprocessed = _preprocess(image);
+
+    final outputTensor = _interpreter!.getOutputTensor(0);
+    final outputShape = outputTensor.shape;
+    final outputClasses = outputShape.last;
+    final outputSteps = outputShape.length > 1 ? outputShape[1] : _outputSeqLen;
+
     final output = List.generate(
-      1,
+      outputShape.first,
       (_) => List.generate(
-        _outputSeqLen,
-        (_) => List.filled(_charset.length + 1, 0.0),
+        outputSteps,
+        (_) => List.filled(outputClasses, 0.0),
       ),
     );
 
@@ -352,11 +358,14 @@ class _PaddleOcrRecognizer {
         (y) => List.generate(_inputWidth, (x) {
           final pixel = resized.getPixel(x, y);
 
-          final r = (pixel.r).toInt();
-          final g = (pixel.g).toInt();
-          final b = (pixel.b).toInt();
+          const mean = 0.5;
+          const std = 0.5;
 
-          return [r / 255.0, g / 255.0, b / 255.0];
+          final r = ((pixel.r / 255.0) - mean) / std;
+          final g = ((pixel.g / 255.0) - mean) / std;
+          final b = ((pixel.b / 255.0) - mean) / std;
+
+          return [r, g, b];
         }),
       ),
     );
