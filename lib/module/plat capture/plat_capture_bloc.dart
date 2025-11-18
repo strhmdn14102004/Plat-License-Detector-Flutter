@@ -105,7 +105,11 @@ class PlateCameraCaptureBloc
       if (img == null) throw Exception("Gagal decode foto");
 
       final fixed = imglib.bakeOrientation(img);
-      final fullJpg = Uint8List.fromList(imglib.encodeJpg(fixed, quality: 95));
+      // Pastikan foto dalam orientasi potrait agar deteksi lebih stabil
+      final imglib.Image upright =
+          fixed.width >= fixed.height ? imglib.copyRotate(fixed, 90) : fixed;
+
+      final fullJpg = Uint8List.fromList(imglib.encodeJpg(upright, quality: 95));
 
       emit(
         state.copyWith(
@@ -118,7 +122,7 @@ class PlateCameraCaptureBloc
 
       final detections = await yolo.detect(fullJpg);
 
-      final minArea = fixed.width * fixed.height * 0.0009;
+      final minArea = upright.width * upright.height * 0.0009;
       detections.removeWhere((d) {
         final area = (d.x2 - d.x1) * (d.y2 - d.y1);
         return area < minArea;
