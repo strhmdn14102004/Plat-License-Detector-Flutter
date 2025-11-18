@@ -85,10 +85,15 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
                         child: Stack(
                           fit: StackFit.expand,
                           children: [
-                            Image.memory(
-                              preview,
-                              fit: BoxFit.contain,
-                              gaplessPlayback: true,
+                            AnimatedRotation(
+                              turns: state.deskewTurns,
+                              duration: const Duration(milliseconds: 320),
+                              curve: Curves.easeOutCubic,
+                              child: Image.memory(
+                                preview,
+                                fit: BoxFit.contain,
+                                gaplessPlayback: true,
+                              ),
                             ),
                             if (state.isProcessing)
                               AnimatedBuilder(
