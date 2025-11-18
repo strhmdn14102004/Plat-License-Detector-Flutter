@@ -68,7 +68,8 @@ class PlateCameraCaptureBloc
     } catch (e) {
       emit(
         PlateCameraCaptureState.initial().copyWith(
-          message: 'Tunggu beberapa saat, jika masih tidak bisa kembali ke page sebelumnya dan buka kembali page capture ini',
+          message:
+              'Tunggu beberapa saat, jika masih tidak bisa kembali ke page sebelumnya dan buka kembali page capture ini',
         ),
       );
     }
@@ -105,11 +106,14 @@ class PlateCameraCaptureBloc
       if (img == null) throw Exception("Gagal decode foto");
 
       final fixed = imglib.bakeOrientation(img);
-      // Pastikan foto dalam orientasi potrait agar deteksi lebih stabil
-      final imglib.Image upright =
-          fixed.width >= fixed.height ? imglib.copyRotate(fixed, 90) : fixed;
 
-      final fullJpg = Uint8List.fromList(imglib.encodeJpg(upright, quality: 95));
+      final imglib.Image upright = fixed.width >= fixed.height
+          ? imglib.copyRotate(fixed, angle: 90)
+          : fixed;
+
+      final fullJpg = Uint8List.fromList(
+        imglib.encodeJpg(upright, quality: 95),
+      );
 
       emit(
         state.copyWith(
@@ -193,7 +197,9 @@ class PlateCameraCaptureBloc
         state.copyWith(
           isProcessing: false,
           progress: 1.0,
-          message: text.isEmpty ? '⚠️Plat Tidak terbaca, coba ubah angle\natau cari pencahayaan yang baik' : '✅ Plat: $text',
+          message: text.isEmpty
+              ? '⚠️Plat Tidak terbaca, coba ubah angle\natau cari pencahayaan yang baik'
+              : '✅ Plat: $text',
           lastText: text.isEmpty ? 'Tidak terbaca' : text,
           preview: cropped,
         ),

@@ -5,7 +5,6 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:vehicle_identification_number/module/home/view_data_page.dart';
-import 'package:vehicle_identification_number/module/lens_selector/lens_selector_page.dart';
 import 'package:vehicle_identification_number/module/plat%20capture/plat_capture_page.dart';
 import 'package:vehicle_identification_number/module/plat%20gallery/plat_gallery_page.dart';
 import 'package:vehicle_identification_number/module/plat%20realtime/plat_realtime_page.dart';
@@ -138,23 +137,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                       ),
                     ),
                   ),
-
-                  const SizedBox(height: 18),
-                  if (Platform.isIOS)
-                    _MainButton(
-                      title: "Multi-Lens Capture",
-                      subtitle:
-                          "Pilih lensa ultra wide, wide, atau tele untuk foto",
-                      icon: Icons.switch_camera_rounded,
-                      color1: const Color(0xFF8B5CF6),
-                      color2: const Color(0xFFA855F7),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const LensSelectorPage(),
-                        ),
-                      ),
-                    ),
 
                   const SizedBox(height: 18),
 

@@ -1,4 +1,4 @@
-// ignore_for_file: use_build_context_synchronously, deprecated_member_use
+// ignore_for_file: deprecated_member_use, use_build_context_synchronously
 
 import 'dart:ui';
 
@@ -102,7 +102,9 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
                                     baseColor: Colors.tealAccent.withOpacity(
                                       0.25,
                                     ),
-                                    highlightColor: Colors.white.withOpacity(0.1),
+                                    highlightColor: Colors.white.withOpacity(
+                                      0.1,
+                                    ),
                                     child: Container(
                                       color: Colors.black.withOpacity(0.25),
                                     ),
@@ -120,7 +122,7 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
                   const Center(
                     child: CircularProgressIndicator(color: Colors.tealAccent),
                   ),
-            
+
                 if (state.isProcessing)
                   Positioned(
                     bottom: 110,
@@ -132,7 +134,7 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
                       backgroundColor: Colors.white10,
                     ),
                   ),
-            
+
                 if (state.message != null)
                   Positioned(
                     bottom: 60,
@@ -148,7 +150,7 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
                       ),
                     ),
                   ),
-            
+
                 Positioned(
                   bottom: 5,
                   left: 0,
@@ -205,7 +207,8 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
           valueListenable: textController,
           builder: (context, value, _) {
             final current = value.text.trim();
-            final canCurrentSave = current.isNotEmpty &&
+            final canCurrentSave =
+                current.isNotEmpty &&
                 current.toLowerCase() != 'tidak terbaca' &&
                 current.toLowerCase() != 'error';
             final normalizedCurrent = current.toUpperCase();
@@ -298,11 +301,11 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
                                   await box.put('data', existing);
                                   if (mounted) {
                                     Navigator.pop(ctx);
-                                    ScaffoldMessenger.of(outerContext)
-                                        .showSnackBar(
+                                    ScaffoldMessenger.of(
+                                      outerContext,
+                                    ).showSnackBar(
                                       SnackBar(
-                                        content:
-                                            Text('Plat $toSave disimpan'),
+                                        content: Text('Plat $toSave disimpan'),
                                       ),
                                     );
                                   }
@@ -318,8 +321,10 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
                             style: TextStyle(color: Colors.white70),
                           ),
                           style: OutlinedButton.styleFrom(
-                            side:
-                                const BorderSide(color: Colors.white24, width: 1),
+                            side: const BorderSide(
+                              color: Colors.white24,
+                              width: 1,
+                            ),
                             padding: const EdgeInsets.symmetric(vertical: 14),
                           ),
                           onPressed: () => Navigator.pop(ctx),

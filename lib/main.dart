@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:vehicle_identification_number/module/home/home_page.dart';
-import 'package:vehicle_identification_number/module/lens_selector/lens_selector_bloc.dart';
 import 'package:vehicle_identification_number/module/plat%20capture/plat_capture_bloc.dart';
 import 'package:vehicle_identification_number/module/plat%20gallery/plat_gallery_bloc.dart';
 import 'package:vehicle_identification_number/module/plat%20gallery/plat_gallery_page.dart';
@@ -52,8 +51,6 @@ class MyApp extends StatelessWidget {
           create: (_) => PlateGalleryBloc(yolo: yoloPool, ocr: ocrPool),
           child: const PlateGalleryPage(),
         ),
-
-        BlocProvider(create: (_) => LensSelectorBloc()),
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
