@@ -43,6 +43,7 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
     on<StartRealtimeCamera>(_onStartCamera);
     on<StopRealtimeCamera>(_onStopCamera);
     on<RealtimeFrameArrived>(_onFrameArrived);
+    on<ChangeRealtimeFlashMode>(_onFlashModeChanged);
 
     _ocrSub = ocrPool.results.listen((text) {
       if (!_streamActive || text.isEmpty) return;
@@ -112,6 +113,8 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
 
     await controller.initialize();
 
+    await _applyFlashMode(controller, state.flashMode);
+
     _sensorOrientation = controller.description.sensorOrientation;
     _lensDirection = controller.description.lensDirection;
     _smoothBox = null;
@@ -145,6 +148,26 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
         lastText: null,
         detected: [],
         message: "📸 Kamera aktif dengan resolusi (${resolution.name})",
+      ),
+    );
+  }
+
+  Future<void> _onFlashModeChanged(
+    ChangeRealtimeFlashMode ev,
+    Emitter<PlateRealtimeState> emit,
+  ) async {
+    await _applyFlashMode(state.controller, ev.mode);
+
+    final label = switch (ev.mode) {
+      FlashMode.auto => 'Auto',
+      FlashMode.torch => 'Nyala',
+      _ => 'Mati',
+    };
+
+    emit(
+      state.copyWith(
+        flashMode: ev.mode,
+        message: '🔦 Flash $label',
       ),
     );
   }
@@ -410,5 +433,17 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
   Future<void> close() async {
     await _ocrSub?.cancel();
     return super.close();
+  }
+
+  Future<void> _applyFlashMode(
+    CameraController? controller,
+    FlashMode mode,
+  ) async {
+    if (controller == null) return;
+    try {
+      await controller.setFlashMode(mode);
+    } catch (e) {
+      debugPrint('⚠️ [Realtime] gagal set flash: $e');
+    }
   }
 }

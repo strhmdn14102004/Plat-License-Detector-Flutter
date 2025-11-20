@@ -50,6 +50,22 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
     super.dispose();
   }
 
+  void _onFlashTap(FlashMode current) {
+    final next = _nextFlashMode(current);
+    context.read<PlateCameraCaptureBloc>().add(ChangeCaptureFlashMode(next));
+  }
+
+  FlashMode _nextFlashMode(FlashMode current) {
+    switch (current) {
+      case FlashMode.off:
+        return FlashMode.auto;
+      case FlashMode.auto:
+        return FlashMode.torch;
+      default:
+        return FlashMode.off;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocConsumer<PlateCameraCaptureBloc, PlateCameraCaptureState>(
@@ -64,6 +80,7 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
       builder: (context, state) {
         final controller = state.controller;
         final preview = state.preview;
+        final flashMode = state.flashMode;
 
         return Scaffold(
           backgroundColor: const Color(0xFF0B1220),
@@ -150,6 +167,16 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
                       ),
                     ),
                   ),
+
+                Positioned(
+                  top: 16,
+                  right: 16,
+                  child: _FlashToggle(
+                    mode: flashMode,
+                    enabled: controller != null,
+                    onTap: () => _onFlashTap(flashMode),
+                  ),
+                ),
 
                 Positioned(
                   bottom: 5,
@@ -356,5 +383,62 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
 
     textController.dispose();
     focusNode.dispose();
+  }
+}
+
+class _FlashToggle extends StatelessWidget {
+  final FlashMode mode;
+  final VoidCallback onTap;
+  final bool enabled;
+
+  const _FlashToggle({
+    required this.mode,
+    required this.onTap,
+    required this.enabled,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = switch (mode) {
+      FlashMode.auto => Icons.flash_auto_rounded,
+      FlashMode.torch => Icons.flash_on_rounded,
+      _ => Icons.flash_off_rounded,
+    };
+    final label = switch (mode) {
+      FlashMode.auto => 'Auto',
+      FlashMode.torch => 'On',
+      _ => 'Off',
+    };
+
+    return Opacity(
+      opacity: enabled ? 1 : 0.5,
+      child: GestureDetector(
+        onTap: enabled ? onTap : null,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.35),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white24, width: 1),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, color: Colors.amberAccent, size: 22),
+                const SizedBox(width: 8),
+                Text(
+                  'Flash $label',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

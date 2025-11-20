@@ -13,6 +13,7 @@ class PlateRealtimeState {
   final String? lastText;
   final List<String> detected;
   final String? message;
+  final FlashMode flashMode;
 
   const PlateRealtimeState({
     required this.isCameraReady,
@@ -22,6 +23,7 @@ class PlateRealtimeState {
     required this.lastText,
     required this.detected,
     required this.message,
+    required this.flashMode,
   });
 
   factory PlateRealtimeState.initial() => const PlateRealtimeState(
@@ -32,6 +34,7 @@ class PlateRealtimeState {
     lastText: null,
     detected: [],
     message: null,
+    flashMode: FlashMode.off,
   );
 
   PlateRealtimeState copyWith({
@@ -42,6 +45,7 @@ class PlateRealtimeState {
     Object? lastText = _sentinel,
     List<String>? detected,
     Object? message = _sentinel,
+    FlashMode? flashMode,
   }) {
     final CameraController? nextController = identical(controller, _sentinel)
         ? this.controller
@@ -64,6 +68,7 @@ class PlateRealtimeState {
       lastText: nextText,
       detected: detected ?? this.detected,
       message: nextMessage,
+      flashMode: flashMode ?? this.flashMode,
     );
   }
 }
