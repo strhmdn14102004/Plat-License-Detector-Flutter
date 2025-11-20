@@ -15,3 +15,8 @@ class ResetCamera extends PlateCameraCaptureEvent {
 }
 
 class DisposeCamera extends PlateCameraCaptureEvent {}
+
+class ChangeCaptureFlashMode extends PlateCameraCaptureEvent {
+  final FlashMode mode;
+  ChangeCaptureFlashMode(this.mode);
+}

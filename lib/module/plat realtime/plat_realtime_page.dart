@@ -64,6 +64,22 @@ class _PlateScanRealtimePageState extends State<PlateScanRealtimePage>
 
   void _toggleScan() => _scanning ? _stopScan() : _startScan();
 
+  void _onFlashTap(FlashMode current) {
+    final next = _nextFlashMode(current);
+    _bloc.add(ChangeRealtimeFlashMode(next));
+  }
+
+  FlashMode _nextFlashMode(FlashMode current) {
+    switch (current) {
+      case FlashMode.off:
+        return FlashMode.auto;
+      case FlashMode.auto:
+        return FlashMode.torch;
+      default:
+        return FlashMode.off;
+    }
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
@@ -91,6 +107,7 @@ class _PlateScanRealtimePageState extends State<PlateScanRealtimePage>
         },
         builder: (context, state) {
           final controller = state.controller;
+          final flashMode = state.flashMode;
           return Scaffold(
             backgroundColor: const Color(0xFF0B1220),
             extendBodyBehindAppBar: true,
@@ -120,6 +137,15 @@ class _PlateScanRealtimePageState extends State<PlateScanRealtimePage>
                   else
                     const _IdleLayer(),
                   const _FocusOverlay(),
+                  Positioned(
+                    top: 70,
+                    right: 16,
+                    child: _FlashToggle(
+                      mode: flashMode,
+                      enabled: controller != null,
+                      onTap: () => _onFlashTap(flashMode),
+                    ),
+                  ),
                   Positioned(
                     top: 10,
                     left: 20,
@@ -307,6 +333,63 @@ class _FocusOverlay extends StatelessWidget {
       ),
     ),
   );
+}
+
+class _FlashToggle extends StatelessWidget {
+  final FlashMode mode;
+  final VoidCallback onTap;
+  final bool enabled;
+
+  const _FlashToggle({
+    required this.mode,
+    required this.onTap,
+    required this.enabled,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = switch (mode) {
+      FlashMode.auto => Icons.flash_auto_rounded,
+      FlashMode.torch => Icons.flash_on_rounded,
+      _ => Icons.flash_off_rounded,
+    };
+    final label = switch (mode) {
+      FlashMode.auto => 'Auto',
+      FlashMode.torch => 'On',
+      _ => 'Off',
+    };
+
+    return Opacity(
+      opacity: enabled ? 1 : 0.5,
+      child: GestureDetector(
+        onTap: enabled ? onTap : null,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.35),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white24, width: 1),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, color: Colors.amberAccent, size: 22),
+                const SizedBox(width: 8),
+                Text(
+                  'Flash $label',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _HudStatus extends StatelessWidget {

@@ -27,6 +27,7 @@ class PlateCameraCaptureBloc
     on<CapturePhoto>(_onCapture);
     on<ResetCamera>(_onReset);
     on<DisposeCamera>(_onDispose);
+    on<ChangeCaptureFlashMode>(_onFlashModeChanged);
   }
 
   Future<void> _onInit(
@@ -46,6 +47,8 @@ class PlateCameraCaptureBloc
       );
       await controller.initialize();
 
+      await _applyFlashMode(controller, state.flashMode);
+
       if (Platform.isIOS) {
         try {
           await controller.lockCaptureOrientation(DeviceOrientation.portraitUp);
@@ -63,6 +66,7 @@ class PlateCameraCaptureBloc
           lastText: null,
           preview: null,
           controller: controller,
+          flashMode: state.flashMode,
         ),
       );
     } catch (e) {
@@ -231,6 +235,7 @@ class PlateCameraCaptureBloc
     emit(
       PlateCameraCaptureState.initial().copyWith(
         message: '🔄 Menghidupkan ulang kamera...',
+        flashMode: state.flashMode,
       ),
     );
     await Future.delayed(const Duration(milliseconds: 300));
@@ -259,7 +264,40 @@ class PlateCameraCaptureBloc
         controller: null,
         lastText: null,
         preview: null,
+        flashMode: state.flashMode,
       ),
     );
+  }
+
+  Future<void> _onFlashModeChanged(
+    ChangeCaptureFlashMode ev,
+    Emitter<PlateCameraCaptureState> emit,
+  ) async {
+    await _applyFlashMode(state.controller, ev.mode);
+
+    final label = switch (ev.mode) {
+      FlashMode.auto => 'Auto',
+      FlashMode.torch => 'Nyala',
+      _ => 'Mati',
+    };
+
+    emit(
+      state.copyWith(
+        flashMode: ev.mode,
+        message: '🔦 Flash $label',
+      ),
+    );
+  }
+
+  Future<void> _applyFlashMode(
+    CameraController? controller,
+    FlashMode mode,
+  ) async {
+    if (controller == null) return;
+    try {
+      await controller.setFlashMode(mode);
+    } catch (e) {
+      debugPrint('⚠️ [Capture] gagal set flash: $e');
+    }
   }
 }

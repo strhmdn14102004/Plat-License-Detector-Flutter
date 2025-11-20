@@ -14,3 +14,8 @@ class RealtimeFrameArrived extends PlateRealtimeEvent {
   final CameraController controller;
   RealtimeFrameArrived(this.image, this.controller);
 }
+
+class ChangeRealtimeFlashMode extends PlateRealtimeEvent {
+  final FlashMode mode;
+  ChangeRealtimeFlashMode(this.mode);
+}
