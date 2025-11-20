@@ -1,11 +1,9 @@
-// ignore_for_file: unnecessary_const
-
 import 'dart:typed_data';
 
 import 'package:camera/camera.dart';
 
 class PlateCameraCaptureState {
-  static const Object _sentinel = const Object();
+  static const Object _sentinel = Object();
   final bool isReady;
   final bool isProcessing;
   final double progress;

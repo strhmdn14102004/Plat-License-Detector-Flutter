@@ -1,11 +1,9 @@
-// ignore_for_file: unnecessary_const
-
 import 'dart:ui';
 
 import 'package:camera/camera.dart';
 
 class PlateRealtimeState {
-  static const Object _sentinel = const Object();
+  static const Object _sentinel = Object();
   final bool isCameraReady;
   final CameraController? controller;
   final bool isProcessing;

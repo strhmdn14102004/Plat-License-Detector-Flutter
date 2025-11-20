@@ -8,8 +8,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:shimmer/shimmer.dart';
 
-import 'plat_capture_constants.dart';
 import 'plat_capture_bloc.dart';
+import 'plat_capture_constants.dart';
 import 'plat_capture_event.dart';
 import 'plat_capture_state.dart';
 
@@ -224,7 +224,7 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
 
     await showModalBottomSheet(
       context: context,
-      isScrollControlled: true, 
+      isScrollControlled: true,
       backgroundColor: Colors.black.withOpacity(0.95),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -334,7 +334,9 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
                                 backgroundColor: canCurrentSave && !alreadySaved
                                     ? Colors.green
                                     : Colors.white12,
-                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
                               ),
                               onPressed: (!canCurrentSave || alreadySaved)
                                   ? null
@@ -374,7 +376,9 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
                                   color: Colors.white24,
                                   width: 1,
                                 ),
-                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
                               ),
                               onPressed: () => Navigator.pop(ctx),
                             ),

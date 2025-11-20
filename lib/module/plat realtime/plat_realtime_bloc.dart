@@ -1,4 +1,4 @@
-// ignore_for_file: invalid_use_of_visible_for_testing_member, depend_on_referenced_packages, unreachable_switch_default
+// ignore_for_file: invalid_use_of_visible_for_testing_member, depend_on_referenced_packages
 
 import 'dart:async';
 import 'dart:io';
@@ -164,12 +164,7 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
       _ => 'Mati',
     };
 
-    emit(
-      state.copyWith(
-        flashMode: ev.mode,
-        message: '🔦 Flash $label',
-      ),
-    );
+    emit(state.copyWith(flashMode: ev.mode, message: '🔦 Flash $label'));
   }
 
   Future<void> _onStopCamera(
@@ -424,8 +419,6 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
         return 180;
       case DeviceOrientation.landscapeRight:
         return 270;
-      default:
-        return 0;
     }
   }
 

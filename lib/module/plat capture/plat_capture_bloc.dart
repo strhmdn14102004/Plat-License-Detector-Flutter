@@ -107,9 +107,6 @@ class PlateCameraCaptureBloc
 
       final file = await controller.takePicture();
 
-      // Beberapa perangkat mematikan flash setelah takePicture(); pastikan
-      // mode sebelumnya diterapkan lagi agar lampu tetap menyala saat pengguna
-      // ingin mengambil ulang foto.
       await _applyFlashMode(controller, desiredFlashMode);
       final bytes = await File(file.path).readAsBytes();
 
@@ -322,12 +319,7 @@ class PlateCameraCaptureBloc
       _ => 'Mati',
     };
 
-    emit(
-      state.copyWith(
-        flashMode: ev.mode,
-        message: '🔦 Flash $label',
-      ),
-    );
+    emit(state.copyWith(flashMode: ev.mode, message: '🔦 Flash $label'));
   }
 
   Future<void> _applyFlashMode(
