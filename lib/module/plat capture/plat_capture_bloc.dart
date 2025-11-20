@@ -143,10 +143,15 @@ class PlateCameraCaptureBloc
       });
 
       if (detections.isEmpty) {
-        final fallbackText = await waitForOcrResult(
-          ocr,
-          fullJpg,
-          timeout: const Duration(seconds: 6),
+        emit(
+          state.copyWith(
+            isProcessing: false,
+            progress: 1.0,
+            message:
+                '❌ Plat tidak terdeteksi, pastikan posisi dan pencahayaan sudah pas',
+            lastText: null,
+            preview: fullJpg,
+          ),
         );
 
         if (fallbackText.isNotEmpty) {
@@ -200,8 +205,8 @@ class PlateCameraCaptureBloc
           state.copyWith(
             isProcessing: false,
             progress: 1.0,
-            message: '❌ Gagal crop gambar',
-            lastText: 'Tidak terbaca',
+            message: '❌ Plat tidak terdeteksi, coba ambil ulang',
+            lastText: null,
             preview: fullJpg,
           ),
         );
@@ -237,7 +242,7 @@ class PlateCameraCaptureBloc
           isProcessing: false,
           progress: 1.0,
           message: text.isEmpty
-              ? '⚠️Plat Tidak terbaca, coba ubah angle\natau cari pencahayaan yang baik'
+              ? '⚠️ Plat Tidak terbaca, coba ubah angle\natau cari pencahayaan yang baik'
               : '✅ Plat: $text',
           lastText: text.isEmpty ? 'Tidak terbaca' : text,
           preview: cropped,
