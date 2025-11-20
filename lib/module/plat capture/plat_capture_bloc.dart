@@ -153,6 +153,28 @@ class PlateCameraCaptureBloc
             preview: fullJpg,
           ),
         );
+
+        if (fallbackText.isNotEmpty) {
+          emit(
+            state.copyWith(
+              isProcessing: false,
+              progress: 1.0,
+              message: '✅ Plat (fallback): $fallbackText',
+              lastText: fallbackText,
+              preview: fullJpg,
+            ),
+          );
+        } else {
+          emit(
+            state.copyWith(
+              isProcessing: false,
+              progress: 1.0,
+              message: '❌ Plat tidak ditemukan',
+              lastText: 'Tidak terbaca',
+              preview: fullJpg,
+            ),
+          );
+        }
         return;
       }
 
