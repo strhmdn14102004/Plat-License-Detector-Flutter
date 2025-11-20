@@ -84,6 +84,7 @@ class PlateCameraCaptureBloc
     Emitter<PlateCameraCaptureState> emit,
   ) async {
     final controller = state.controller;
+    final desiredFlashMode = state.flashMode;
     if (controller == null || !controller.value.isInitialized) return;
 
     emit(
@@ -104,6 +105,11 @@ class PlateCameraCaptureBloc
       }
 
       final file = await controller.takePicture();
+
+      // Beberapa perangkat mematikan flash setelah takePicture(); pastikan
+      // mode sebelumnya diterapkan lagi agar lampu tetap menyala saat pengguna
+      // ingin mengambil ulang foto.
+      await _applyFlashMode(controller, desiredFlashMode);
       final bytes = await File(file.path).readAsBytes();
 
       final img = imglib.decodeImage(bytes);
@@ -137,15 +143,33 @@ class PlateCameraCaptureBloc
       });
 
       if (detections.isEmpty) {
-        emit(
-          state.copyWith(
-            isProcessing: false,
-            progress: 1.0,
-            message: '❌ Plat tidak ditemukan',
-            lastText: 'Tidak terbaca',
-            preview: fullJpg,
-          ),
+        final fallbackText = await waitForOcrResult(
+          ocr,
+          fullJpg,
+          timeout: const Duration(seconds: 6),
         );
+
+        if (fallbackText.isNotEmpty) {
+          emit(
+            state.copyWith(
+              isProcessing: false,
+              progress: 1.0,
+              message: '✅ Plat (fallback): $fallbackText',
+              lastText: fallbackText,
+              preview: fullJpg,
+            ),
+          );
+        } else {
+          emit(
+            state.copyWith(
+              isProcessing: false,
+              progress: 1.0,
+              message: '❌ Plat tidak ditemukan',
+              lastText: 'Tidak terbaca',
+              preview: fullJpg,
+            ),
+          );
+        }
         return;
       }
 
@@ -192,11 +216,22 @@ class PlateCameraCaptureBloc
         ),
       );
 
-      final text = await waitForOcrResult(
+      var text = await waitForOcrResult(
         ocr,
         cropped,
         timeout: const Duration(seconds: 5),
       );
+
+      if (text.isEmpty || text.length < 5) {
+        final broadAttempt = await waitForOcrResult(
+          ocr,
+          fullJpg,
+          timeout: const Duration(seconds: 6),
+        );
+        if (broadAttempt.isNotEmpty) {
+          text = broadAttempt;
+        }
+      }
       emit(
         state.copyWith(
           isProcessing: false,
