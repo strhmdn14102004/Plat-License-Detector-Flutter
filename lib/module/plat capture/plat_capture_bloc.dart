@@ -13,6 +13,7 @@ import 'package:vehicle_identification_number/service/ocr_isolate_pool.dart';
 import 'package:vehicle_identification_number/service/yolo_isolate_pool.dart';
 import 'package:vehicle_identification_number/utils/plate_processing.dart';
 
+import 'plat_capture_constants.dart';
 import 'plat_capture_event.dart';
 import 'plat_capture_state.dart';
 
@@ -84,6 +85,7 @@ class PlateCameraCaptureBloc
     Emitter<PlateCameraCaptureState> emit,
   ) async {
     final controller = state.controller;
+    final desiredFlashMode = state.flashMode;
     if (controller == null || !controller.value.isInitialized) return;
 
     emit(
@@ -104,6 +106,11 @@ class PlateCameraCaptureBloc
       }
 
       final file = await controller.takePicture();
+
+      // Beberapa perangkat mematikan flash setelah takePicture(); pastikan
+      // mode sebelumnya diterapkan lagi agar lampu tetap menyala saat pengguna
+      // ingin mengambil ulang foto.
+      await _applyFlashMode(controller, desiredFlashMode);
       final bytes = await File(file.path).readAsBytes();
 
       final img = imglib.decodeImage(bytes);
@@ -141,8 +148,9 @@ class PlateCameraCaptureBloc
           state.copyWith(
             isProcessing: false,
             progress: 1.0,
-            message: '❌ Plat tidak ditemukan',
-            lastText: 'Tidak terbaca',
+            message:
+                '❌ Plat tidak terdeteksi, pastikan posisi dan pencahayaan sudah pas',
+            lastText: null,
             preview: fullJpg,
           ),
         );
@@ -176,8 +184,8 @@ class PlateCameraCaptureBloc
           state.copyWith(
             isProcessing: false,
             progress: 1.0,
-            message: '❌ Gagal crop gambar',
-            lastText: 'Tidak terbaca',
+            message: '❌ Plat tidak terdeteksi, coba ambil ulang',
+            lastText: null,
             preview: fullJpg,
           ),
         );
@@ -192,19 +200,30 @@ class PlateCameraCaptureBloc
         ),
       );
 
-      final text = await waitForOcrResult(
+      var text = await waitForOcrResult(
         ocr,
         cropped,
         timeout: const Duration(seconds: 5),
       );
+
+      if (text.isEmpty || text.length < 5) {
+        final broadAttempt = await waitForOcrResult(
+          ocr,
+          fullJpg,
+          timeout: const Duration(seconds: 6),
+        );
+        if (broadAttempt.isNotEmpty) {
+          text = broadAttempt;
+        }
+      }
       emit(
         state.copyWith(
           isProcessing: false,
           progress: 1.0,
           message: text.isEmpty
-              ? '⚠️Plat Tidak terbaca, coba ubah angle\natau cari pencahayaan yang baik'
+              ? '⚠️ Plat Tidak terbaca, coba ubah angle\natau cari pencahayaan yang baik'
               : '✅ Plat: $text',
-          lastText: text.isEmpty ? 'Tidak terbaca' : text,
+          lastText: text.isEmpty ? fallbackText : text,
           preview: cropped,
         ),
       );
