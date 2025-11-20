@@ -8,6 +8,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:shimmer/shimmer.dart';
 
+import 'plat_capture_constants.dart';
 import 'plat_capture_bloc.dart';
 import 'plat_capture_event.dart';
 import 'plat_capture_state.dart';
@@ -217,7 +218,7 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
 
   Future<void> _showResult(BuildContext context, String text) async {
     final outerContext = context;
-    final normalized = text.trim();
+    final normalized = text.trim().isNotEmpty ? text.trim() : fallbackText;
     final textController = TextEditingController(text: normalized);
     final focusNode = FocusNode();
 

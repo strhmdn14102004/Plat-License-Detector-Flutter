@@ -13,6 +13,7 @@ import 'package:vehicle_identification_number/service/ocr_isolate_pool.dart';
 import 'package:vehicle_identification_number/service/yolo_isolate_pool.dart';
 import 'package:vehicle_identification_number/utils/plate_processing.dart';
 
+import 'plat_capture_constants.dart';
 import 'plat_capture_event.dart';
 import 'plat_capture_state.dart';
 
@@ -244,7 +245,7 @@ class PlateCameraCaptureBloc
           message: text.isEmpty
               ? '⚠️ Plat Tidak terbaca, coba ubah angle\natau cari pencahayaan yang baik'
               : '✅ Plat: $text',
-          lastText: text.isEmpty ? 'Tidak terbaca' : text,
+          lastText: text.isEmpty ? fallbackText : text,
           preview: cropped,
         ),
       );
