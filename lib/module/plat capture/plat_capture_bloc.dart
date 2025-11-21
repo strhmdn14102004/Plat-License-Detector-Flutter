@@ -9,7 +9,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image/image.dart' as imglib;
-import 'package:vehicle_identification_number/service/ocr_isolate_pool.dart';
+import 'package:vehicle_identification_number/service/gemini_ocr_service.dart';
 import 'package:vehicle_identification_number/service/yolo_isolate_pool.dart';
 import 'package:vehicle_identification_number/utils/plate_processing.dart';
 
@@ -19,9 +19,9 @@ import 'plat_capture_state.dart';
 class PlateCameraCaptureBloc
     extends Bloc<PlateCameraCaptureEvent, PlateCameraCaptureState> {
   final YoloIsolatePool yolo;
-  final OcrIsolatePool ocr;
+  final GeminiOcrService geminiOcr;
 
-  PlateCameraCaptureBloc({required this.yolo, required this.ocr})
+  PlateCameraCaptureBloc({required this.yolo, required this.geminiOcr})
     : super(PlateCameraCaptureState.initial()) {
     on<InitializeCamera>(_onInit);
     on<CapturePhoto>(_onCapture);
@@ -192,11 +192,7 @@ class PlateCameraCaptureBloc
         ),
       );
 
-      final text = await waitForOcrResult(
-        ocr,
-        cropped,
-        timeout: const Duration(seconds: 5),
-      );
+      final text = await geminiOcr.recognizePlate(cropped);
       emit(
         state.copyWith(
           isProcessing: false,

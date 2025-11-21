@@ -7,7 +7,7 @@ import 'package:vehicle_identification_number/module/plat%20capture/plat_capture
 import 'package:vehicle_identification_number/module/plat%20gallery/plat_gallery_bloc.dart';
 import 'package:vehicle_identification_number/module/plat%20gallery/plat_gallery_page.dart';
 import 'package:vehicle_identification_number/module/plat%20realtime/plat_realtime_bloc.dart';
-import 'package:vehicle_identification_number/service/ocr_isolate_pool.dart';
+import 'package:vehicle_identification_number/service/gemini_ocr_service.dart';
 import 'package:vehicle_identification_number/service/yolo_isolate_pool.dart';
 
 void main() async {
@@ -23,17 +23,17 @@ void main() async {
   final yoloPool = YoloIsolatePool();
   await yoloPool.init(bytes, 640, 0.5);
 
-  final ocrPool = OcrIsolatePool();
-  ocrPool.start();
+  const geminiApiKey = 'AIzaSyAaXIBhfrhi2lwwiekFdTsdKt-8RWVCZGI';
+  final geminiOcr = GeminiOcrService(apiKey: geminiApiKey);
 
-  runApp(MyApp(yoloPool: yoloPool, ocrPool: ocrPool));
+  runApp(MyApp(yoloPool: yoloPool, geminiOcr: geminiOcr));
 }
 
 class MyApp extends StatelessWidget {
   final YoloIsolatePool yoloPool;
-  final OcrIsolatePool ocrPool;
+  final GeminiOcrService geminiOcr;
 
-  const MyApp({super.key, required this.yoloPool, required this.ocrPool});
+  const MyApp({super.key, required this.yoloPool, required this.geminiOcr});
 
   @override
   Widget build(BuildContext context) {
@@ -41,14 +41,14 @@ class MyApp extends StatelessWidget {
       providers: [
         BlocProvider(
           create: (BuildContext context) =>
-              PlateRealtimeBloc(yoloPool: yoloPool, ocrPool: ocrPool),
+              PlateRealtimeBloc(yoloPool: yoloPool, geminiOcr: geminiOcr),
         ),
         BlocProvider(
           create: (BuildContext context) =>
-              PlateCameraCaptureBloc(yolo: yoloPool, ocr: ocrPool),
+              PlateCameraCaptureBloc(yolo: yoloPool, geminiOcr: geminiOcr),
         ),
         BlocProvider(
-          create: (_) => PlateGalleryBloc(yolo: yoloPool, ocr: ocrPool),
+          create: (_) => PlateGalleryBloc(yolo: yoloPool, geminiOcr: geminiOcr),
           child: const PlateGalleryPage(),
         ),
       ],
