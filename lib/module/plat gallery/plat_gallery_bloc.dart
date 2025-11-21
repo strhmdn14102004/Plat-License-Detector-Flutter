@@ -8,15 +8,15 @@ import 'package:flutter/material.dart';
 import 'package:image/image.dart' as imglib;
 import 'package:vehicle_identification_number/module/plat gallery/plat_gallery_event.dart';
 import 'package:vehicle_identification_number/module/plat gallery/plat_gallery_state.dart';
-import 'package:vehicle_identification_number/service/ocr_isolate_pool.dart';
+import 'package:vehicle_identification_number/service/gemini_ocr_service.dart';
 import 'package:vehicle_identification_number/service/yolo_isolate_pool.dart';
 import 'package:vehicle_identification_number/utils/plate_processing.dart';
 
 class PlateGalleryBloc extends Bloc<PlateGalleryEvent, PlateGalleryState> {
   final YoloIsolatePool yolo;
-  final OcrIsolatePool ocr;
+  final GeminiOcrService geminiOcr;
 
-  PlateGalleryBloc({required this.yolo, required this.ocr})
+  PlateGalleryBloc({required this.yolo, required this.geminiOcr})
     : super(
         PlateGalleryState(
           isProcessing: false,
@@ -127,11 +127,7 @@ class PlateGalleryBloc extends Bloc<PlateGalleryEvent, PlateGalleryState> {
         ),
       );
 
-      final text = await waitForOcrResult(
-        ocr,
-        cropped,
-        timeout: const Duration(seconds: 5),
-      );
+      final text = await geminiOcr.recognizePlate(cropped);
 
       emit(
         PlateGalleryState(
