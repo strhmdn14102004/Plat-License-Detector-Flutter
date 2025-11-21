@@ -102,7 +102,7 @@ class PlateGalleryBloc extends Bloc<PlateGalleryEvent, PlateGalleryState> {
         ),
       );
 
-      final cropped = await cropPlateRegion(jpg640, rect, marginFactor: 0.25);
+      final cropped = await cropPlateRegion(jpg640, rect, marginFactor: 0.15);
 
       if (cropped == null) {
         emit(
