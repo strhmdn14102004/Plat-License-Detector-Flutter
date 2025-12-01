@@ -1,4 +1,4 @@
-// ignore_for_file: invalid_use_of_visible_for_testing_member, depend_on_referenced_packages
+// ignore_for_file: invalid_use_of_visible_for_testing_member, depend_on_referenced_packages, unreachable_switch_default
 
 import 'dart:async';
 import 'dart:io';
@@ -11,13 +11,13 @@ import 'package:flutter/services.dart';
 import 'package:image/image.dart' as imglib;
 import 'package:vehicle_identification_number/module/plat realtime/plat_realtime_event.dart';
 import 'package:vehicle_identification_number/module/plat realtime/plat_realtime_state.dart';
-import 'package:vehicle_identification_number/service/gemini_ocr_service.dart';
+import 'package:vehicle_identification_number/service/ocr_isolate_pool.dart';
 import 'package:vehicle_identification_number/service/yolo_isolate_pool.dart';
 import 'package:vehicle_identification_number/utils/plate_processing.dart';
 
 class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
   final YoloIsolatePool yoloPool;
-  final GeminiOcrService geminiOcr;
+  final OcrIsolatePool ocrPool;
 
   bool _busy = false;
   bool _streamActive = false;
@@ -32,17 +32,34 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
   Size? _lastFrameSize;
   Size? _previewSize;
   int _frameRotation = 0;
-  bool _ocrBusy = false;
 
   final int _intervalYolo = 200;
   final int _intervalOcr = 600;
 
-  PlateRealtimeBloc({required this.yoloPool, required this.geminiOcr})
+  StreamSubscription<String>? _ocrSub;
+
+  PlateRealtimeBloc({required this.yoloPool, required this.ocrPool})
     : super(PlateRealtimeState.initial()) {
     on<StartRealtimeCamera>(_onStartCamera);
     on<StopRealtimeCamera>(_onStopCamera);
     on<RealtimeFrameArrived>(_onFrameArrived);
     on<ChangeRealtimeFlashMode>(_onFlashModeChanged);
+
+    _ocrSub = ocrPool.results.listen((text) {
+      if (!_streamActive || text.isEmpty) return;
+      final updated = List<String>.from(state.detected);
+      if (!updated.contains(text)) updated.add(text);
+      emit(
+        state.copyWith(
+          isCameraReady: true,
+          isProcessing: false,
+          lastBox: _smoothBox,
+          lastText: text,
+          detected: updated,
+          message: '✅ Plat: $text',
+        ),
+      );
+    });
   }
 
   Future<void> _onStartCamera(
@@ -115,6 +132,7 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
     }
 
     _streamActive = true;
+    ocrPool.start();
 
     await controller.startImageStream((img) {
       if (!_streamActive) return;
@@ -146,7 +164,12 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
       _ => 'Mati',
     };
 
-    emit(state.copyWith(flashMode: ev.mode, message: '🔦 Flash $label'));
+    emit(
+      state.copyWith(
+        flashMode: ev.mode,
+        message: '🔦 Flash $label',
+      ),
+    );
   }
 
   Future<void> _onStopCamera(
@@ -228,17 +251,13 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
       final bounds = frameSize ?? Size.zero;
       final scaledRect = bounds.isEmpty
           ? rawRect
-          : expandRectWithinBounds(rawRect, bounds, marginFactor: 0.15);
+          : expandRectWithinBounds(rawRect, bounds, marginFactor: 0.2);
       _smoothBox = _blend(scaledRect, _smoothBox);
 
-      if (!_ocrBusy &&
-          now.difference(_lastOcr).inMilliseconds > _intervalOcr) {
+      if (now.difference(_lastOcr).inMilliseconds > _intervalOcr) {
         _lastOcr = now;
         final crop = await _crop(bytes, rawRect);
-        if (crop != null) {
-          _ocrBusy = true;
-          await _performGeminiOcr(crop, emit);
-        }
+        if (crop != null) ocrPool.push(crop);
       }
 
       emit(
@@ -253,34 +272,6 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
       );
     } finally {
       _busy = false;
-    }
-  }
-
-  Future<void> _performGeminiOcr(
-    Uint8List crop,
-    Emitter<PlateRealtimeState> emit,
-  ) async {
-    try {
-      final text = await geminiOcr.recognizePlate(crop);
-      if (text.isEmpty || isClosed || !_streamActive) return;
-
-      final updated = List<String>.from(state.detected);
-      if (!updated.contains(text)) updated.add(text);
-
-      emit(
-        state.copyWith(
-          isCameraReady: true,
-          isProcessing: false,
-          lastBox: _smoothBox,
-          lastText: text,
-          detected: updated,
-          message: '✅ Plat: $text',
-        ),
-      );
-    } catch (e) {
-      debugPrint('⚠️ Gemini OCR gagal: $e');
-    } finally {
-      _ocrBusy = false;
     }
   }
 
@@ -400,7 +391,7 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
   }
 
   Future<Uint8List?> _crop(Uint8List jpeg, Rect rect) async {
-    return cropPlateRegion(jpeg, rect, marginFactor: 0.25, quality: 100);
+    return cropPlateRegionSync(jpeg, rect, marginFactor: 0.25, quality: 100);
   }
 
   Rect _blend(Rect n, Rect? p, {double a = 0.3}) {
@@ -433,7 +424,15 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
         return 180;
       case DeviceOrientation.landscapeRight:
         return 270;
-      }
+      default:
+        return 0;
+    }
+  }
+
+  @override
+  Future<void> close() async {
+    await _ocrSub?.cancel();
+    return super.close();
   }
 
   Future<void> _applyFlashMode(
