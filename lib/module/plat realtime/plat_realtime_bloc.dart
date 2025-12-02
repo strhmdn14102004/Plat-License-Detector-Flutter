@@ -1,449 +1,244 @@
-// ignore_for_file: invalid_use_of_visible_for_testing_member, depend_on_referenced_packages, unreachable_switch_default
+// ignore_for_file: invalid_use_of_visible_for_testing_member, depend_on_referenced_packages
 
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
+import 'dart:ui';
 
 import 'package:bloc/bloc.dart';
 import 'package:camera/camera.dart';
-import 'package:device_info_plus/device_info_plus.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:image/image.dart' as imglib;
-import 'package:vehicle_identification_number/module/plat realtime/plat_realtime_event.dart';
-import 'package:vehicle_identification_number/module/plat realtime/plat_realtime_state.dart';
+import 'package:vehicle_identification_number/module/plat%20realtime/plat_realtime_event.dart';
+import 'package:vehicle_identification_number/module/plat%20realtime/plat_realtime_state.dart';
 import 'package:vehicle_identification_number/service/ocr_isolate_pool.dart';
 import 'package:vehicle_identification_number/service/yolo_isolate_pool.dart';
 import 'package:vehicle_identification_number/utils/plate_processing.dart';
 
 class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
-  final YoloIsolatePool yoloPool;
-  final OcrIsolatePool ocrPool;
+  final YoloIsolatePool yolo;
+  final OcrIsolatePool ocr;
 
   bool _busy = false;
-  bool _streamActive = false;
-  double _fps = 0;
-  DateTime _lastFrame = DateTime.now();
-  DateTime _lastProcessed = DateTime.fromMillisecondsSinceEpoch(0);
-  DateTime _lastOcr = DateTime.fromMillisecondsSinceEpoch(0);
-  Rect? _smoothBox;
-  String activeResolution = "high";
-  int _sensorOrientation = 90;
-  CameraLensDirection? _lensDirection;
-  Size? _lastFrameSize;
-  Size? _previewSize;
-  int _frameRotation = 0;
 
-  final int _intervalYolo = 200;
-  final int _intervalOcr = 600;
-
-  StreamSubscription<String>? _ocrSub;
-
-  PlateRealtimeBloc({required this.yoloPool, required this.ocrPool})
+  PlateRealtimeBloc({required this.yolo, required this.ocr})
     : super(PlateRealtimeState.initial()) {
-    on<StartRealtimeCamera>(_onStartCamera);
-    on<StopRealtimeCamera>(_onStopCamera);
-    on<RealtimeFrameArrived>(_onFrameArrived);
-    on<ChangeRealtimeFlashMode>(_onFlashModeChanged);
-
-    _ocrSub = ocrPool.results.listen((text) {
-      if (!_streamActive || text.isEmpty) return;
-      final updated = List<String>.from(state.detected);
-      if (!updated.contains(text)) updated.add(text);
-      emit(
-        state.copyWith(
-          isCameraReady: true,
-          isProcessing: false,
-          lastBox: _smoothBox,
-          lastText: text,
-          detected: updated,
-          message: '✅ Plat: $text',
-        ),
-      );
-    });
+    on<InitializeRealtimeCamera>(_onInit);
+    on<DisposeRealtimeCamera>(_onDispose);
+    on<ChangeRealtimeFlash>(_onFlash);
   }
 
-  Future<void> _onStartCamera(
-    StartRealtimeCamera ev,
+  Future<void> _onInit(
+    InitializeRealtimeCamera ev,
     Emitter<PlateRealtimeState> emit,
   ) async {
-    final deviceInfo = DeviceInfoPlugin();
-    ResolutionPreset resolution = ResolutionPreset.high;
-    activeResolution = "high";
-
     try {
-      if (Platform.isAndroid) {
-        final android = await deviceInfo.androidInfo;
-        final sdk = android.version.sdkInt;
-        resolution = sdk <= 30
-            ? ResolutionPreset.medium
-            : ResolutionPreset.high;
-        activeResolution = resolution.name;
-      } else if (Platform.isIOS) {
-        final info = await deviceInfo.iosInfo;
-        final model = info.utsname.machine.toLowerCase();
-
-        if (model.contains('iphone10,') ||
-            model.contains('iphone11,') ||
-            model.contains('iphone12,1')) {
-          resolution = ResolutionPreset.medium;
-          activeResolution = "medium";
-        } else {
-          resolution = ResolutionPreset.medium;
-          activeResolution = "medium";
-        }
-
-        debugPrint(
-          "📱 iPhone model: ${info.utsname.machine} → Resolution: ${resolution.name}",
-        );
-      }
-    } catch (e) {
-      resolution = ResolutionPreset.high;
-    }
-
-    debugPrint('🎥 [Realtime] Using camera preset: $resolution');
-
-    final controller = CameraController(
-      ev.camera,
-      resolution,
-      enableAudio: false,
-      imageFormatGroup: Platform.isIOS
-          ? ImageFormatGroup.bgra8888
-          : ImageFormatGroup.yuv420,
-    );
-
-    await controller.initialize();
-
-    await _applyFlashMode(controller, state.flashMode);
-
-    _sensorOrientation = controller.description.sensorOrientation;
-    _lensDirection = controller.description.lensDirection;
-    _smoothBox = null;
-    _lastFrameSize = null;
-    _previewSize = controller.value.previewSize;
-    _frameRotation = _computeRotation(controller.value.deviceOrientation);
-
-    if (Platform.isIOS) {
-      try {
-        await controller.lockCaptureOrientation(DeviceOrientation.portraitUp);
-      } catch (e) {
-        debugPrint('⚠️ Failed to lock orientation: $e');
-      }
-      _frameRotation = _computeRotation(controller.value.deviceOrientation);
-    }
-
-    _streamActive = true;
-    ocrPool.start();
-
-    await controller.startImageStream((img) {
-      if (!_streamActive) return;
-      add(RealtimeFrameArrived(img, controller));
-    });
-
-    emit(
-      state.copyWith(
-        isCameraReady: true,
-        controller: controller,
-        isProcessing: false,
-        lastBox: null,
-        lastText: null,
-        detected: [],
-        message: "📸 Kamera aktif dengan resolusi (${resolution.name})",
-      ),
-    );
-  }
-
-  Future<void> _onFlashModeChanged(
-    ChangeRealtimeFlashMode ev,
-    Emitter<PlateRealtimeState> emit,
-  ) async {
-    await _applyFlashMode(state.controller, ev.mode);
-
-    final label = switch (ev.mode) {
-      FlashMode.auto => 'Auto',
-      FlashMode.torch => 'Nyala',
-      _ => 'Mati',
-    };
-
-    emit(
-      state.copyWith(
-        flashMode: ev.mode,
-        message: '🔦 Flash $label',
-      ),
-    );
-  }
-
-  Future<void> _onStopCamera(
-    StopRealtimeCamera ev,
-    Emitter<PlateRealtimeState> emit,
-  ) async {
-    _streamActive = false;
-    try {
-      await state.controller?.stopImageStream();
       await state.controller?.dispose();
-    } catch (_) {}
 
-    _smoothBox = null;
-    _lensDirection = null;
-    _lastFrameSize = null;
-    _previewSize = null;
-    _frameRotation = 0;
-
-    emit(
-      state.copyWith(
-        isCameraReady: false,
-        controller: null,
-        isProcessing: false,
-        lastBox: null,
-        lastText: null,
-        message: 'Kamera berhenti',
-      ),
-    );
-  }
-
-  Future<void> _onFrameArrived(
-    RealtimeFrameArrived ev,
-    Emitter<PlateRealtimeState> emit,
-  ) async {
-    final now = DateTime.now();
-    if (_busy) return;
-
-    _frameRotation = _computeRotation(ev.controller.value.deviceOrientation);
-    final previewSize = ev.controller.value.previewSize;
-    if (previewSize != null) {
-      _previewSize = previewSize;
-    }
-
-    final diff = now.difference(_lastFrame).inMilliseconds;
-    if (diff > 0) _fps = 1000 / diff;
-    _lastFrame = now;
-
-    if (now.difference(_lastProcessed).inMilliseconds < _intervalYolo) return;
-    _busy = true;
-    _lastProcessed = now;
-
-    try {
-      final bytes = await _toRGB(ev.image);
-      if (bytes == null) return;
-
-      final result = await yoloPool.detect(bytes);
-      if (result.isEmpty) return;
-
-      final frameSize = _lastFrameSize;
-      if (frameSize != null) {
-        final double minArea = frameSize.width * frameSize.height * 0.0007;
-        result.removeWhere((d) {
-          final area = (d.x2 - d.x1) * (d.y2 - d.y1);
-          return area < minArea;
-        });
-      }
-
-      result.sort((a, b) => b.score.compareTo(a.score));
-      final best = result.first;
-      if (best.score < 0.4) return;
-
-      final rawRect = Rect.fromLTRB(
-        best.x1.toDouble(),
-        best.y1.toDouble(),
-        best.x2.toDouble(),
-        best.y2.toDouble(),
+      final controller = CameraController(
+        ev.camera,
+        ResolutionPreset.medium,
+        enableAudio: false,
+        imageFormatGroup: Platform.isIOS
+            ? ImageFormatGroup.bgra8888
+            : ImageFormatGroup.yuv420,
       );
 
-      final bounds = frameSize ?? Size.zero;
-      final scaledRect = bounds.isEmpty
-          ? rawRect
-          : expandRectWithinBounds(rawRect, bounds, marginFactor: 0.2);
-      _smoothBox = _blend(scaledRect, _smoothBox);
+      await controller.initialize();
+      await controller.setFlashMode(state.flash);
 
-      if (now.difference(_lastOcr).inMilliseconds > _intervalOcr) {
-        _lastOcr = now;
-        final crop = await _crop(bytes, rawRect);
-        if (crop != null) ocrPool.push(crop);
-      }
+      await controller.startImageStream(_processFrame);
 
       emit(
-        state.copyWith(
-          isCameraReady: true,
-          controller: ev.controller,
+        PlateRealtimeState(
+          isReady: true,
           isProcessing: false,
-          lastBox: _smoothBox,
-          message:
-              "⚙️ FPS: ${_fps.toStringAsFixed(1)} | Plat: ${state.lastText ?? '-'}",
+          controller: controller,
+          text: null,
+          flash: state.flash,
+          cropped: null,
+          fullFrame: null,
+          message: "Kamera realtime aktif",
         ),
       );
-    } finally {
-      _busy = false;
+    } catch (e) {
+      emit(
+        PlateRealtimeState(
+          isReady: false,
+          isProcessing: false,
+          controller: null,
+          text: null,
+          flash: FlashMode.off,
+          cropped: null,
+          fullFrame: null,
+          message: "⚠️ Kamera gagal dihidupkan",
+        ),
+      );
     }
   }
 
-  Future<Uint8List?> _toRGB(CameraImage img) async {
-    try {
-      imglib.Image image;
+  Future<void> _processFrame(CameraImage frame) async {
+    if (_busy) return;
+    _busy = true;
 
-      if (Platform.isIOS && img.format.group == ImageFormatGroup.bgra8888) {
-        image = _convertBgra(img);
-        _lastFrameSize = Size(image.width.toDouble(), image.height.toDouble());
-        debugPrint(
-          "📷 iOS frame → w=${image.width}, h=${image.height} (no extra rotate)",
+    final jpeg = await _convertToJpeg(frame);
+    if (jpeg == null) {
+      _busy = false;
+      return;
+    }
+
+    final det = await yolo.detect(jpeg);
+
+    if (det.isEmpty) {
+      emit(
+        PlateRealtimeState(
+          isReady: true,
+          isProcessing: false,
+          controller: state.controller,
+          text: null,
+          flash: state.flash,
+          cropped: null,
+          fullFrame: jpeg,
+          message: "Mencari plat...",
+        ),
+      );
+      _busy = false;
+      return;
+    }
+
+    det.sort((a, b) => b.score.compareTo(a.score));
+    final best = det.first;
+
+    final rect = Rect.fromLTRB(
+      best.x1.toDouble(),
+      best.y1.toDouble(),
+      best.x2.toDouble(),
+      best.y2.toDouble(),
+    );
+
+    final cropped = await cropPlateRegion(jpeg, rect, marginFactor: 0.22);
+
+    if (cropped == null) {
+      _busy = false;
+      return;
+    }
+
+    final text = await ocr.runMlKit(cropped);
+
+    emit(
+      PlateRealtimeState(
+        isReady: true,
+        isProcessing: false,
+        controller: state.controller,
+        text: text,
+        flash: state.flash,
+        cropped: cropped,
+        fullFrame: jpeg,
+        message: "Plat: $text",
+      ),
+    );
+
+    _busy = false;
+  }
+
+  Future<Uint8List?> _convertToJpeg(CameraImage img) async {
+    try {
+      if (img.format.group == ImageFormatGroup.bgra8888) {
+        final plane = img.planes[0];
+        final bytes = plane.bytes;
+
+        final buffer = bytes.buffer;
+
+        final imglib.Image rgba = imglib.Image.fromBytes(
+          width: img.width,
+          height: img.height,
+          bytes: buffer,
+
+          numChannels: 4,
+          order: imglib.ChannelOrder.bgra,
+          format: imglib.Format.uint8,
         );
-      } else {
-        image = _yuvToRgb(img);
-        image = _applyOrientation(image, rotationOverride: _frameRotation);
+
+        final jpg = imglib.encodeJpg(rgba, quality: 90);
+        return Uint8List.fromList(jpg);
       }
 
-      return Uint8List.fromList(imglib.encodeJpg(image, quality: 90));
-    } catch (e, st) {
-      debugPrint("⚠️ _toRGB error: $e\n$st");
+      final rgb = _convertYuv420(img);
+      if (rgb == null) return null;
+
+      return Uint8List.fromList(imglib.encodeJpg(rgb, quality: 90));
+    } catch (_) {
       return null;
     }
   }
 
-  imglib.Image _convertBgra(CameraImage img) {
-    final plane = img.planes.first;
-    final bytes = plane.bytes;
-    final rowStride = plane.bytesPerRow;
-    final bytesPerPixel = plane.bytesPerPixel ?? 4;
-    final width = img.width;
-    final height = img.height;
-
-    if (rowStride == width * bytesPerPixel) {
-      return imglib.Image.fromBytes(
-        width: width,
-        height: height,
-        bytes: bytes.buffer,
-        numChannels: bytesPerPixel,
-        order: imglib.ChannelOrder.bgra,
-      );
-    }
-
-    final buffer = Uint8List(width * height * bytesPerPixel);
-    final rowBytes = width * bytesPerPixel;
-    for (int y = 0; y < height; y++) {
-      final srcOffset = y * rowStride;
-      final dstOffset = y * rowBytes;
-      final slice = bytes.buffer.asUint8List(srcOffset, rowBytes);
-      buffer.setRange(dstOffset, dstOffset + rowBytes, slice);
-    }
-
-    return imglib.Image.fromBytes(
-      width: width,
-      height: height,
-      bytes: buffer.buffer,
-      numChannels: bytesPerPixel,
-      order: imglib.ChannelOrder.bgra,
-    );
-  }
-
-  imglib.Image _applyOrientation(imglib.Image image, {int? rotationOverride}) {
-    int rotation = (rotationOverride ?? _sensorOrientation) % 360;
-
-    if (Platform.isIOS && _previewSize != null) {
-      final bool expectsPortrait = _previewSize!.height >= _previewSize!.width;
-      final bool rawIsPortrait = image.height >= image.width;
-
-      if (expectsPortrait) {
-        if (!rawIsPortrait && rotation % 180 == 0) {
-          rotation = (rotation + 90) % 360;
-        }
-      } else {
-        if (rawIsPortrait && rotation % 180 == 0) {
-          rotation = (rotation + 90) % 360;
-        }
-      }
-    }
-
-    imglib.Image rotated = image;
-    if (rotation != 0) {
-      rotated = imglib.copyRotate(image, angle: rotation);
-    }
-
-    if (_lensDirection == CameraLensDirection.front) {
-      rotated = imglib.flipHorizontal(rotated);
-    }
-    _lastFrameSize = Size(rotated.width.toDouble(), rotated.height.toDouble());
-    return rotated;
-  }
-
-  imglib.Image _yuvToRgb(CameraImage img) {
-    final w = img.width;
-    final h = img.height;
-    final out = imglib.Image(width: w, height: h);
-    final Y = img.planes[0].bytes;
-    final U = img.planes[1].bytes;
-    final V = img.planes[2].bytes;
-    final uvRowStride = img.planes[1].bytesPerRow;
-    final uvPixelStride = img.planes[1].bytesPerPixel ?? 1;
-
-    for (int y = 0; y < h; y++) {
-      for (int x = 0; x < w; x++) {
-        final uvIndex = uvPixelStride * (x ~/ 2) + uvRowStride * (y ~/ 2);
-        final yp = Y[y * w + x];
-        final up = U[uvIndex];
-        final vp = V[uvIndex];
-        int r = (yp + vp * 1436 / 1024 - 179).clamp(0, 255).toInt();
-        int g = (yp - up * 46549 / 131072 + 44 - vp * 93604 / 131072 + 91)
-            .clamp(0, 255)
-            .toInt();
-        int b = (yp + up * 1814 / 1024 - 227).clamp(0, 255).toInt();
-        out.setPixelRgb(x, y, r, g, b);
-      }
-    }
-    return out;
-  }
-
-  Future<Uint8List?> _crop(Uint8List jpeg, Rect rect) async {
-    return cropPlateRegionSync(jpeg, rect, marginFactor: 0.25, quality: 90);
-  }
-
-  Rect _blend(Rect n, Rect? p, {double a = 0.3}) {
-    if (p == null) return n;
-    double lerp(double x, double y) => x + (y - x) * a;
-    return Rect.fromLTWH(
-      lerp(p.left, n.left),
-      lerp(p.top, n.top),
-      lerp(p.width, n.width),
-      lerp(p.height, n.height),
-    );
-  }
-
-  int _computeRotation(DeviceOrientation orientation) {
-    final orientationDegrees = _deviceOrientationToDegrees(orientation);
-    final lens = _lensDirection ?? CameraLensDirection.back;
-    if (lens == CameraLensDirection.front) {
-      return (_sensorOrientation - orientationDegrees + 360) % 360;
-    }
-    return (_sensorOrientation + orientationDegrees) % 360;
-  }
-
-  int _deviceOrientationToDegrees(DeviceOrientation orientation) {
-    switch (orientation) {
-      case DeviceOrientation.portraitUp:
-        return 0;
-      case DeviceOrientation.landscapeLeft:
-        return 90;
-      case DeviceOrientation.portraitDown:
-        return 180;
-      case DeviceOrientation.landscapeRight:
-        return 270;
-      default:
-        return 0;
-    }
-  }
-
-  @override
-  Future<void> close() async {
-    await _ocrSub?.cancel();
-    return super.close();
-  }
-
-  Future<void> _applyFlashMode(
-    CameraController? controller,
-    FlashMode mode,
-  ) async {
-    if (controller == null) return;
+  imglib.Image? _convertYuv420(CameraImage img) {
     try {
-      await controller.setFlashMode(mode);
-    } catch (e) {
-      debugPrint('⚠️ [Realtime] gagal set flash: $e');
+      final width = img.width;
+      final height = img.height;
+
+      final y = img.planes[0].bytes;
+      final u = img.planes[1].bytes;
+      final v = img.planes[2].bytes;
+
+      final out = imglib.Image(width: width, height: height);
+
+      int index = 0;
+
+      for (int yy = 0; yy < height; yy++) {
+        for (int xx = 0; xx < width; xx++) {
+          final yp = y[index];
+
+          final uvIndex = (yy ~/ 2) * (width ~/ 2) + (xx ~/ 2);
+
+          final up = u[uvIndex];
+          final vp = v[uvIndex];
+
+          final r = (yp + 1.370705 * (vp - 128)).clamp(0, 255).toInt();
+          final g = (yp - 0.337633 * (up - 128) - 0.698001 * (vp - 128))
+              .clamp(0, 255)
+              .toInt();
+          final b = (yp + 1.732446 * (up - 128)).clamp(0, 255).toInt();
+
+          out.setPixelRgba(xx, yy, r, g, b, 255);
+
+          index++;
+        }
+      }
+
+      return out;
+    } catch (_) {
+      return null;
     }
+  }
+
+  Future<void> _onFlash(
+    ChangeRealtimeFlash ev,
+    Emitter<PlateRealtimeState> emit,
+  ) async {
+    await state.controller?.setFlashMode(ev.mode);
+
+    emit(
+      PlateRealtimeState(
+        isReady: state.isReady,
+        isProcessing: state.isProcessing,
+        controller: state.controller,
+        text: state.text,
+        flash: ev.mode,
+        cropped: state.cropped,
+        fullFrame: state.fullFrame,
+        message: "Flash: ${ev.mode.name}",
+      ),
+    );
+  }
+
+  Future<void> _onDispose(
+    DisposeRealtimeCamera ev,
+    Emitter<PlateRealtimeState> emit,
+  ) async {
+    try {
+      await state.controller?.dispose();
+    } catch (_) {}
+
+    emit(PlateRealtimeState.initial());
   }
 }

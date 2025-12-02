@@ -1,74 +1,36 @@
-// ignore_for_file: unnecessary_const
-
-import 'dart:ui';
+import 'dart:typed_data';
 
 import 'package:camera/camera.dart';
 
 class PlateRealtimeState {
-  static const Object _sentinel = const Object();
-  final bool isCameraReady;
-  final CameraController? controller;
+  final bool isReady;
   final bool isProcessing;
-  final Rect? lastBox;
-  final String? lastText;
-  final List<String> detected;
-  final String? message;
-  final FlashMode flashMode;
+  final CameraController? controller;
+  final String? text;
+  final FlashMode flash;
+  final Uint8List? cropped;
+  final Uint8List? fullFrame;
+  final String message;
 
   const PlateRealtimeState({
-    required this.isCameraReady,
-    required this.controller,
+    required this.isReady,
     required this.isProcessing,
-    required this.lastBox,
-    required this.lastText,
-    required this.detected,
+    required this.controller,
+    required this.text,
+    required this.flash,
+    required this.cropped,
+    required this.fullFrame,
     required this.message,
-    required this.flashMode,
   });
 
   factory PlateRealtimeState.initial() => const PlateRealtimeState(
-    isCameraReady: false,
-    controller: null,
+    isReady: false,
     isProcessing: false,
-    lastBox: null,
-    lastText: null,
-    detected: [],
-    message: null,
-    flashMode: FlashMode.off,
+    controller: null,
+    text: null,
+    flash: FlashMode.off,
+    cropped: null,
+    fullFrame: null,
+    message: "Menyiapkan kamera...",
   );
-
-  PlateRealtimeState copyWith({
-    bool? isCameraReady,
-    Object? controller = _sentinel,
-    bool? isProcessing,
-    Object? lastBox = _sentinel,
-    Object? lastText = _sentinel,
-    List<String>? detected,
-    Object? message = _sentinel,
-    FlashMode? flashMode,
-  }) {
-    final CameraController? nextController = identical(controller, _sentinel)
-        ? this.controller
-        : controller as CameraController?;
-    final Rect? nextBox = identical(lastBox, _sentinel)
-        ? this.lastBox
-        : lastBox as Rect?;
-    final String? nextText = identical(lastText, _sentinel)
-        ? this.lastText
-        : lastText as String?;
-    final String? nextMessage = identical(message, _sentinel)
-        ? this.message
-        : message as String?;
-
-    return PlateRealtimeState(
-      isCameraReady: isCameraReady ?? this.isCameraReady,
-      controller: nextController,
-      isProcessing: isProcessing ?? this.isProcessing,
-      lastBox: nextBox,
-      lastText: nextText,
-      detected: detected ?? this.detected,
-      message: nextMessage,
-      flashMode: flashMode ?? this.flashMode,
-    );
-  }
 }

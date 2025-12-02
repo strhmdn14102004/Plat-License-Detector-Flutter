@@ -8,30 +8,29 @@ import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as imglib;
+import 'package:vehicle_identification_number/module/plat_capture_mlkit/plat_capture_mlkit_event.dart';
+import 'package:vehicle_identification_number/module/plat_capture_mlkit/plat_capture_mlkit_state.dart';
 import 'package:vehicle_identification_number/service/ocr_isolate_pool.dart';
 import 'package:vehicle_identification_number/service/yolo_isolate_pool.dart';
 import 'package:vehicle_identification_number/utils/plate_processing.dart';
 
-import 'plat_capture_event.dart';
-import 'plat_capture_state.dart';
-
-class PlateCameraCaptureBloc
-    extends Bloc<PlateCameraCaptureEvent, PlateCameraCaptureState> {
+class PlateMlkitCaptureBloc
+    extends Bloc<PlateMlkitCaptureEvent, PlateMlkitCaptureState> {
   final YoloIsolatePool yolo;
   final OcrIsolatePool ocr;
 
-  PlateCameraCaptureBloc({required this.yolo, required this.ocr})
-    : super(PlateCameraCaptureState.initial()) {
-    on<InitializeCamera>(_onInit);
-    on<CapturePhoto>(_onCapture);
-    on<ResetCamera>(_onReset);
-    on<DisposeCamera>(_onDispose);
-    on<ChangeCaptureFlashMode>(_onFlashModeChanged);
+  PlateMlkitCaptureBloc({required this.yolo, required this.ocr})
+    : super(PlateMlkitCaptureState.initial()) {
+    on<InitializeMlkitCamera>(_onInit);
+    on<CaptureMlkitPhoto>(_onCapture);
+    on<ResetMlkitCamera>(_onReset);
+    on<DisposeMlkitCamera>(_onDispose);
+    on<ChangeMlkitFlashMode>(_onFlashModeChanged);
   }
 
   Future<void> _onInit(
-    InitializeCamera ev,
-    Emitter<PlateCameraCaptureState> emit,
+    InitializeMlkitCamera ev,
+    Emitter<PlateMlkitCaptureState> emit,
   ) async {
     try {
       await state.controller?.dispose();
@@ -56,21 +55,21 @@ class PlateCameraCaptureBloc
           lastText: null,
           progress: 0.0,
           isProcessing: false,
-          message: "📸 Kamera siap",
+          message: "📸 Kamera siap (ML Kit)",
         ),
       );
-    } catch (e) {
+    } catch (_) {
       emit(
-        PlateCameraCaptureState.initial().copyWith(
-          message: "⚠️ Kamera gagal. Restart halaman.",
+        PlateMlkitCaptureState.initial().copyWith(
+          message: "⚠️ Kamera gagal. Coba ulangi.",
         ),
       );
     }
   }
 
   Future<void> _onCapture(
-    CapturePhoto ev,
-    Emitter<PlateCameraCaptureState> emit,
+    CaptureMlkitPhoto ev,
+    Emitter<PlateMlkitCaptureState> emit,
   ) async {
     final controller = state.controller;
     if (controller == null) return;
@@ -79,7 +78,7 @@ class PlateCameraCaptureBloc
       state.copyWith(
         isProcessing: true,
         progress: 0.1,
-        message: "📸 Mengambil foto...",
+        message: "📸 Mengambil foto... (ML Kit)",
       ),
     );
 
@@ -116,7 +115,7 @@ class PlateCameraCaptureBloc
       final detections = await yolo.detect(fullJpg);
 
       if (detections.isEmpty) {
-        return emit(
+        emit(
           state.copyWith(
             isProcessing: false,
             progress: 1.0,
@@ -124,6 +123,7 @@ class PlateCameraCaptureBloc
             message: "❌ Plat tidak ditemukan",
           ),
         );
+        return;
       }
 
       detections.sort((a, b) => b.score.compareTo(a.score));
@@ -140,41 +140,43 @@ class PlateCameraCaptureBloc
 
       final cropped = await cropPlateRegion(fullJpg, rect, marginFactor: 0.22);
       if (cropped == null) {
-        return emit(
+        emit(
           state.copyWith(
             isProcessing: false,
             lastText: "Tidak terbaca",
             message: "❌ Gagal crop",
           ),
         );
+        return;
       }
 
       emit(
-        state.copyWith(preview: cropped, progress: 0.7, message: "🧠 OCR..."),
+        state.copyWith(
+          preview: cropped,
+          progress: 0.7,
+          message: "🧠 OCR (ML Kit)...",
+        ),
       );
 
-      final text = await waitHybridOcr(
-        ocr,
-        cropped: cropped,
-        fullImage: fullJpg,
-      );
+      final text = await ocr.runMlKit(cropped);
 
       emit(
         state.copyWith(
           isProcessing: false,
           progress: 1.0,
           lastText: text.isEmpty ? "Tidak terbaca" : text,
-          message: text.isEmpty ? "⚠️ Plat tidak terbaca" : "✅ Plat: $text",
+          message: text.isEmpty
+              ? "⚠️ Plat tidak terbaca"
+              : "✅ Plat (ML Kit): $text",
           preview: cropped,
         ),
       );
-    } catch (e, st) {
-      debugPrint("❌ Capture error: $e\n$st");
+    } catch (_) {
       emit(
         state.copyWith(
           isProcessing: false,
           lastText: "Error",
-          message: "❌ Error: $e",
+          message: "❌ Error capture ML Kit",
           preview: null,
         ),
       );
@@ -182,45 +184,43 @@ class PlateCameraCaptureBloc
   }
 
   Future<void> _onReset(
-    ResetCamera ev,
-    Emitter<PlateCameraCaptureState> emit,
+    ResetMlkitCamera ev,
+    Emitter<PlateMlkitCaptureState> emit,
   ) async {
     await state.controller?.dispose();
 
     emit(
-      PlateCameraCaptureState.initial().copyWith(
+      PlateMlkitCaptureState.initial().copyWith(
         message: "🔄 Restart kamera...",
         flashMode: state.flashMode,
       ),
     );
 
     await Future.delayed(const Duration(milliseconds: 300));
-    add(InitializeCamera(ev.camera));
+    add(InitializeMlkitCamera(ev.camera));
   }
 
   Future<void> _onDispose(
-    DisposeCamera ev,
-    Emitter<PlateCameraCaptureState> emit,
+    DisposeMlkitCamera ev,
+    Emitter<PlateMlkitCaptureState> emit,
   ) async {
     try {
       await state.controller?.dispose();
     } catch (_) {}
 
     emit(
-      PlateCameraCaptureState.initial().copyWith(
-        message: "Kamera dihentikan",
+      PlateMlkitCaptureState.initial().copyWith(
+        message: "Kamera dihentikan.",
         controller: null,
-        preview: null,
       ),
     );
   }
 
   Future<void> _onFlashModeChanged(
-    ChangeCaptureFlashMode ev,
-    Emitter<PlateCameraCaptureState> emit,
+    ChangeMlkitFlashMode ev,
+    Emitter<PlateMlkitCaptureState> emit,
   ) async {
     await _applyFlashMode(state.controller, ev.mode);
-
     emit(state.copyWith(flashMode: ev.mode, message: "Flash diubah"));
   }
 

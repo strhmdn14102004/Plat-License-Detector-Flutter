@@ -3,11 +3,12 @@
 import 'dart:io';
 import 'dart:ui';
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:vehicle_identification_number/module/home/view_data_page.dart';
 import 'package:vehicle_identification_number/module/plat%20capture/plat_capture_page.dart';
-import 'package:vehicle_identification_number/module/plat%20gallery/plat_gallery_page.dart';
 import 'package:vehicle_identification_number/module/plat%20realtime/plat_realtime_page.dart';
+import 'package:vehicle_identification_number/module/plat_capture_mlkit/plat_capture_mlkit_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -19,17 +20,37 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   late final AnimationController _glowCtl;
   late final Animation<double> _glowAnim;
 
+  bool isOnline = true;
+
   @override
   void initState() {
     super.initState();
+    Connectivity().onConnectivityChanged.listen((_) async {
+      final real = await _checkInternet();
+      setState(() => isOnline = real);
+    });
+
     _glowCtl = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 5),
     )..repeat(reverse: true);
+
     _glowAnim = Tween<double>(
       begin: 0.7,
       end: 1.2,
     ).animate(CurvedAnimation(parent: _glowCtl, curve: Curves.easeInOut));
+  }
+
+  Future<bool> _checkInternet() async {
+    try {
+      final result = await InternetAddress.lookup(
+        'google.com',
+      ).timeout(const Duration(seconds: 2));
+
+      return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+    } catch (e) {
+      return false;
+    }
   }
 
   @override
@@ -106,34 +127,65 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 30),
-
-                  const _ShimmerButton(),
                   const SizedBox(height: 18),
-                  _MainButton(
-                    title: "Mode Capture",
-                    subtitle: "Deteksi plat dari hasil foto (non-realtime)",
-                    icon: Icons.camera_enhance_rounded,
-                    color1: const Color(0xFFF59E0B),
-                    color2: const Color(0xFFFBBF24),
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const PlateCameraCapturePage(),
-                      ),
+
+                  Opacity(
+                    opacity: isOnline ? 1 : 0.45,
+                    child: _MainButton(
+                      title: "Scan dengan google gemini",
+                      subtitle: "Scan menggunakan Google Gemini (ONLINE)",
+                      icon: Icons.camera_enhance_rounded,
+                      color1: const Color(0xFFF59E0B),
+                      color2: const Color(0xFFFBBF24),
+                      onTap: () {
+                        if (!isOnline) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                "⚠ Tidak ada internet — Gemini membutuhkan koneksi!",
+                              ),
+                            ),
+                          );
+                          return;
+                        }
+
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const PlateCameraCapturePage(),
+                          ),
+                        );
+                      },
                     ),
                   ),
                   const SizedBox(height: 18),
+
                   _MainButton(
-                    title: "Scan From Gallery",
-                    subtitle: "Deteksi plat dari hasil foto (non-realtime)",
+                    title: "Scan secara realtime",
+                    subtitle:
+                        "Scan secara realtime menggunakan Google ML Kit (OFFLINE)",
                     icon: Icons.camera_enhance_rounded,
                     color1: const Color.fromARGB(255, 157, 144, 122),
                     color2: const Color.fromARGB(255, 114, 102, 72),
                     onTap: () => Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const PlateGalleryPage(),
+                        builder: (_) => const PlateRealtimePage(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+
+                  _MainButton(
+                    title: "Scan dengan model local",
+                    subtitle: "Scan menggunakan Google ML Kit (OFFLINE)",
+                    icon: Icons.camera_enhance_rounded,
+                    color1: const Color.fromARGB(255, 157, 144, 122),
+                    color2: const Color.fromARGB(255, 114, 102, 72),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const PlateMlkitCapturePage(),
                       ),
                     ),
                   ),
@@ -151,6 +203,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                       MaterialPageRoute(builder: (_) => ViewDataPage()),
                     ),
                   ),
+
                   const SizedBox(height: 30),
                 ],
               ),
@@ -164,7 +217,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
 class _AnimatedBackground extends StatefulWidget {
   const _AnimatedBackground();
-
   @override
   State<_AnimatedBackground> createState() => _AnimatedBackgroundState();
 }
@@ -406,122 +458,6 @@ class _MainButton extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _ShimmerButton extends StatefulWidget {
-  const _ShimmerButton();
-
-  @override
-  State<_ShimmerButton> createState() => _ShimmerButtonState();
-}
-
-class _ShimmerButtonState extends State<_ShimmerButton>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _shimmerCtl;
-
-  @override
-  void initState() {
-    super.initState();
-    _shimmerCtl = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 4),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _shimmerCtl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _shimmerCtl,
-      builder: (context, _) {
-        final offset = _shimmerCtl.value;
-        return InkWell(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const PlateScanRealtimePage()),
-            );
-          },
-          borderRadius: BorderRadius.circular(22),
-          child: Container(
-            height: 140,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(22),
-              gradient: LinearGradient(
-                begin: Alignment(-1 + offset, 0),
-                end: Alignment(offset + 1, 0),
-                colors: const [
-                  Color(0xFF16A34A),
-                  Color(0xFF4ADE80),
-                  Color(0xFF16A34A),
-                ],
-                stops: const [0.0, 0.5, 1.0],
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF4ADE80).withOpacity(0.25),
-                  blurRadius: 25,
-                  spreadRadius: 1,
-                  offset: const Offset(0, 10),
-                ),
-              ],
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              children: [
-                Container(
-                  width: 66,
-                  height: 66,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: Colors.white.withOpacity(0.15)),
-                  ),
-                  child: const Icon(
-                    Icons.camera_alt_rounded,
-                    color: Colors.white,
-                    size: 34,
-                  ),
-                ),
-                const SizedBox(width: 18),
-                const Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "Mulai Scan",
-                        style: TextStyle(
-                          fontSize: 21,
-                          fontWeight: FontWeight.w900,
-                          color: Colors.white,
-                        ),
-                      ),
-                      SizedBox(height: 5),
-                      Text(
-                        "Deteksi plat kendaraan secara realtime",
-                        style: TextStyle(fontSize: 13.5, color: Colors.white70),
-                      ),
-                    ],
-                  ),
-                ),
-                const Icon(
-                  Icons.arrow_forward_rounded,
-                  size: 28,
-                  color: Colors.white,
-                ),
-              ],
-            ),
-          ),
-        );
-      },
     );
   }
 }

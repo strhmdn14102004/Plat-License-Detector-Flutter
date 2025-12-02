@@ -1,1 +1,1 @@
-Plat license detector menggunakan tflite flutter dengan model yolo yang sudah ditrainning 
+Plat license detector menggunakan tflite flutter dengan model yolo yang sudah ditrainning ditambah google gemini ai sebagai opsional

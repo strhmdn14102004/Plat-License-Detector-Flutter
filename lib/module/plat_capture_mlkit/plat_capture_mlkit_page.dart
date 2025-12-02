@@ -4,19 +4,18 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:vehicle_identification_number/module/plat_capture_mlkit/plat_capture_mlkit_bloc.dart';
+import 'package:vehicle_identification_number/module/plat_capture_mlkit/plat_capture_mlkit_event.dart';
+import 'package:vehicle_identification_number/module/plat_capture_mlkit/plat_capture_mlkit_state.dart';
 
-import 'plat_capture_bloc.dart';
-import 'plat_capture_event.dart';
-import 'plat_capture_state.dart';
-
-class PlateCameraCapturePage extends StatefulWidget {
-  const PlateCameraCapturePage({super.key});
+class PlateMlkitCapturePage extends StatefulWidget {
+  const PlateMlkitCapturePage({super.key});
 
   @override
-  State<PlateCameraCapturePage> createState() => _PlateCameraCapturePageState();
+  State<PlateMlkitCapturePage> createState() => _PlateMlkitCapturePageState();
 }
 
-class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
+class _PlateMlkitCapturePageState extends State<PlateMlkitCapturePage>
     with SingleTickerProviderStateMixin {
   CameraDescription? _camera;
   late final AnimationController _animCtl;
@@ -24,34 +23,37 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
   @override
   void initState() {
     super.initState();
+
     _animCtl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 700),
     );
 
-    context.read<PlateCameraCaptureBloc>().ocr.start();
+    context.read<PlateMlkitCaptureBloc>().ocr.start();
     _initCamera();
   }
 
   Future<void> _initCamera() async {
     final cams = await availableCameras();
+
     _camera = cams.firstWhere(
       (c) => c.lensDirection == CameraLensDirection.back,
       orElse: () => cams.first,
     );
-    context.read<PlateCameraCaptureBloc>().add(InitializeCamera(_camera!));
+
+    context.read<PlateMlkitCaptureBloc>().add(InitializeMlkitCamera(_camera!));
   }
 
   @override
   void dispose() {
-    context.read<PlateCameraCaptureBloc>().add(DisposeCamera());
+    context.read<PlateMlkitCaptureBloc>().add(DisposeMlkitCamera());
     _animCtl.dispose();
     super.dispose();
   }
 
   void _onFlashTap(FlashMode current) {
     final next = _nextFlashMode(current);
-    context.read<PlateCameraCaptureBloc>().add(ChangeCaptureFlashMode(next));
+    context.read<PlateMlkitCaptureBloc>().add(ChangeMlkitFlashMode(next));
   }
 
   FlashMode _nextFlashMode(FlashMode current) {
@@ -69,17 +71,19 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
   Widget build(BuildContext context) {
     return WillPopScope(
       onWillPop: () async {
-        context.read<PlateCameraCaptureBloc>().add(DisposeCamera());
+        context.read<PlateMlkitCaptureBloc>().add(DisposeMlkitCamera());
         await Future.delayed(const Duration(milliseconds: 150));
         return true;
       },
-      child: BlocConsumer<PlateCameraCaptureBloc, PlateCameraCaptureState>(
+      child: BlocConsumer<PlateMlkitCaptureBloc, PlateMlkitCaptureState>(
         listener: (context, state) async {
           if (!state.isProcessing &&
               state.lastText != null &&
               state.preview != null) {
             await _showResult(context, state.lastText!);
-            context.read<PlateCameraCaptureBloc>().add(ResetCamera(_camera!));
+            context.read<PlateMlkitCaptureBloc>().add(
+              ResetMlkitCamera(_camera!),
+            );
           }
         },
         builder: (context, state) {
@@ -91,7 +95,7 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
             backgroundColor: const Color(0xFF0B1220),
             appBar: AppBar(
               backgroundColor: Colors.transparent,
-              title: const Text("Mode Kamera Scanner"),
+              title: const Text("Scanner ML Kit Only"),
               centerTitle: true,
             ),
             body: SafeArea(
@@ -170,11 +174,13 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
                       child: ElevatedButton.icon(
                         icon: const Icon(Icons.camera_alt),
                         label: Text(
-                          state.isProcessing ? "Memproses..." : "Ambil Foto",
+                          state.isProcessing
+                              ? "Memproses..."
+                              : "Ambil Foto (ML Kit)",
                         ),
                         onPressed: state.isReady && !state.isProcessing
-                            ? () => context.read<PlateCameraCaptureBloc>().add(
-                                CapturePhoto(),
+                            ? () => context.read<PlateMlkitCaptureBloc>().add(
+                                CaptureMlkitPhoto(),
                               )
                             : null,
                         style: ElevatedButton.styleFrom(
@@ -251,7 +257,7 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
 
                     const Center(
                       child: Text(
-                        'Plat Terbaca',
+                        'Plat Terbaca (ML Kit)',
                         style: TextStyle(color: Colors.white70, fontSize: 16),
                       ),
                     ),
@@ -277,20 +283,6 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
                           borderSide: const BorderSide(color: Colors.white24),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(color: Colors.white24),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(
-                            color: Colors.tealAccent,
-                          ),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 18,
-                          vertical: 14,
                         ),
                       ),
                     ),
@@ -334,7 +326,6 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
                           ),
                         ),
                         const SizedBox(width: 12),
-
                         Expanded(
                           child: OutlinedButton.icon(
                             icon: const Icon(
@@ -389,6 +380,7 @@ class _FlashToggle extends StatelessWidget {
       FlashMode.torch => Icons.flash_on_rounded,
       _ => Icons.flash_off_rounded,
     };
+
     final label = switch (mode) {
       FlashMode.auto => 'Auto',
       FlashMode.torch => 'On',
@@ -403,7 +395,6 @@ class _FlashToggle extends StatelessWidget {
           decoration: BoxDecoration(
             color: Colors.black.withOpacity(0.35),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.white24, width: 1),
           ),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
