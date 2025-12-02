@@ -1,4 +1,4 @@
-// ignore_for_file: body_might_complete_normally_catch_error
+// ignore_for_file: unused_field, body_might_complete_normally_catch_error
 
 import 'dart:async';
 import 'dart:io';
@@ -17,101 +17,89 @@ class OcrIsolatePool {
   final _onResult = StreamController<String>.broadcast();
   Stream<String> get results => _onResult.stream;
 
+  // ---------------------------------------------------------------------------
+  // START QUEUE
+  // ---------------------------------------------------------------------------
   void start() {
     if (_running) return;
     _running = true;
+
     _queue.stream.asyncMap(_process).listen((text) {
-      if (text != null && text.isNotEmpty) _onResult.add(text);
+      if (text != null && text.isNotEmpty) {
+        _onResult.add(text);
+      }
     });
   }
 
   void push(Uint8List jpeg) => _queue.add(jpeg);
 
-  imglib.Image preprocessPlate(imglib.Image src) {
-    final w = src.width;
-    final h = src.height;
-
-    final gray = imglib.Image(width: w, height: h);
-    for (int y = 0; y < h; y++) {
-      for (int x = 0; x < w; x++) {
-        final p = src.getPixel(x, y);
-        final lum = ((0.299 * p.r + 0.587 * p.g + 0.114 * p.b).round().clamp(
-          0,
-          255,
-        )).toInt();
-        gray.setPixelRgba(x, y, lum, lum, lum, 255);
-      }
-    }
-
-    final highContrast = imglib.adjustColor(
-      gray,
-      contrast: 1.25,
-      brightness: 0.02,
-    );
-
-    final sharpen = imglib.convolution(
-      highContrast,
-      filter: const [0, -1, 0, -1, 5, -1, 0, -1, 0],
-      div: 1,
-    );
-
-    final bw = imglib.Image(width: w, height: h);
-
-    int sampleCount = 0;
-    int sumLum = 0;
-
-    for (int y = 0; y < h; y += 10) {
-      for (int x = 0; x < w; x += 10) {
-        final p = sharpen.getPixel(x, y);
-        final lum = (p.r).toInt();
-        sumLum += lum;
-        sampleCount++;
-      }
-    }
-
-    if (sampleCount == 0) return sharpen;
-
-    double avgLum = sumLum / sampleCount;
-    avgLum = avgLum.clamp(60.0, 160.0).toDouble();
-
-    final threshold = (avgLum * 0.85).toInt();
-
-    for (int y = 0; y < h; y++) {
-      for (int x = 0; x < w; x++) {
-        final p = sharpen.getPixel(x, y);
-        final lum = (p.r).toInt();
-        if (lum > threshold) {
-          bw.setPixelRgba(x, y, 255, 255, 255, 255);
-        } else {
-          bw.setPixelRgba(x, y, 0, 0, 0, 255);
-        }
-      }
-    }
-
-    return bw;
+  // ---------------------------------------------------------------------------
+  // MAP HURUF → ANGKA DI BAGIAN TENGAH (KHUSUS DIGIT)
+  // ---------------------------------------------------------------------------
+  String fixMiddleDigits(String mid) {
+    return mid
+        .replaceAll('A', '4')
+        .replaceAll('Z', '2')
+        .replaceAll('S', '5')
+        .replaceAll('B', '8')
+        .replaceAll('O', '0')
+        .replaceAll('I', '1')
+        .replaceAll('T', '7');
   }
 
+  // Sharpen kernel (3x3)
+  final List<num> sharpenKernel = const [0, -1, 0, -1, 5, -1, 0, -1, 0];
+
+  // ---------------------------------------------------------------------------
+  // CORE OCR PIPELINE
+  // ---------------------------------------------------------------------------
   Future<String?> _process(Uint8List jpeg) async {
     try {
       final now = DateTime.now();
-      final diff = now.difference(_lastProcessed).inMilliseconds;
-      final isRealtime = diff < 300;
       _lastProcessed = now;
 
+      // Decode image
       var img = imglib.decodeImage(jpeg);
       if (img == null) return null;
 
-      img = preprocessPlate(img);
+      // -----------------------------------------------------------------------
+      // DETEKSI KIRA-KIRA PLAT GELAP / TERANG
+      // -----------------------------------------------------------------------
+      final thumb = imglib.copyResize(img, width: 40);
+      final grayBytes = thumb.getBytes().map((b) => b & 0xFF).toList();
+      final meanGray = grayBytes.isEmpty
+          ? 128.0
+          : grayBytes.reduce((a, b) => a + b) / grayBytes.length;
 
+      final bool isBlackPlate = meanGray < 90;
+
+      // -----------------------------------------------------------------------
+      // PRE-PROCESSING SESUAI PLAT
+      // -----------------------------------------------------------------------
+      if (isBlackPlate) {
+        // Plat hitam (tulisan putih)
+        img = imglib.adjustColor(img, brightness: 0.45, contrast: 1.75);
+        img = imglib.convolution(img, filter: sharpenKernel, div: 1, offset: 0);
+      } else {
+        // Plat terang (putih / kuning)
+        img = imglib.adjustColor(img, brightness: 0.12, contrast: 1.35);
+        img = imglib.convolution(img, filter: sharpenKernel, div: 1, offset: 0);
+        // Sedikit blur buat ilangin noise tipis
+        img = imglib.gaussianBlur(img, radius: 1);
+      }
+
+      // Simpan ke file sementara untuk MLKit
       final tmp = await getTemporaryDirectory();
       final file = File(
         p.join(tmp.path, 'ocr_${now.millisecondsSinceEpoch}.jpg'),
-      )..writeAsBytesSync(imglib.encodeJpg(img, quality: 100), flush: true);
+      )..writeAsBytesSync(imglib.encodeJpg(img, quality: 95));
 
+      // -----------------------------------------------------------------------
+      // GOOGLE ML KIT TEXT RECOGNITION
+      // -----------------------------------------------------------------------
       final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
       final input = InputImage.fromFile(file);
       final result = await recognizer.processImage(input);
-
       await recognizer.close();
       await file.delete().catchError((_) {});
 
@@ -123,59 +111,83 @@ class OcrIsolatePool {
         }
       }
 
-      if (lines.isEmpty) return "";
+      if (lines.isEmpty) return '';
 
+      // Urutkan yang paling banyak digit dulu (biasanya bagian nomor plat)
+      lines.sort((a, b) {
+        final da = RegExp(r'\d').allMatches(a).length;
+        final db = RegExp(r'\d').allMatches(b).length;
+        return db.compareTo(da);
+      });
+
+      // -----------------------------------------------------------------------
+      // NORMALIZER PLAT INDONESIA
+      // - prefix : 1–3 huruf
+      // - mid    : 1–5 digit
+      // - suffix : 0–4 huruf
+      // -----------------------------------------------------------------------
       String normalize(String raw) {
         var t = raw
-            .toUpperCase()
-            .replaceAll(RegExp(r'[^A-Z0-9Ø\s\-]'), ' ')
+            .replaceAll(RegExp(r'[^A-Z0-9]'), ' ')
             .replaceAll(RegExp(r'\s+'), ' ')
-            .trim();
+            .trim()
+            .toUpperCase();
 
-        t = t.replaceAll('4', 'A').replaceAll('7', 'T');
+        final parts = t.split(' ').where((e) => e.isNotEmpty).toList();
+        if (parts.length < 2) return t;
 
-        final re = RegExp(r'^([A-Z]{1,3})\s*([A-Z0-9]{1,5})\s*([A-ZØ]{0,4})$');
-        final m = re.firstMatch(t);
-        if (m == null) return t;
-
-        var prefix = m[1] ?? '';
-        var mid = m[2] ?? '';
-        var suffix = m[3] ?? '';
-
+        // ---------------- PREFIX (HURUF SAJA) ----------------
+        String prefix = parts[0];
         prefix = prefix
             .replaceAll('0', 'O')
             .replaceAll('1', 'I')
             .replaceAll('2', 'Z')
-            .replaceAll('3', 'B')
+            .replaceAll('4', 'A')
             .replaceAll('5', 'S')
             .replaceAll('6', 'G')
             .replaceAll('8', 'B');
 
-        mid = mid
-            .replaceAll('O', '0')
-            .replaceAll('Ø', '0')
-            .replaceAll('I', '1')
-            .replaceAll('Z', '2')
-            .replaceAll('T', '7')
-            .replaceAll('S', '5')
-            .replaceAll('B', '8')
-            .replaceAll('G', '6');
+        // Harus 1-3 huruf
+        if (!RegExp(r'^[A-Z]{1,3}$').hasMatch(prefix)) {
+          return t;
+        }
 
-        suffix = suffix
-            .replaceAll('0', 'O')
-            .replaceAll('Ø', 'O')
-            .replaceAll('Q', 'O')
-            .replaceAll('1', 'I')
-            .replaceAll('2', 'Z')
-            .replaceAll('5', 'S')
-            .replaceAll('6', 'G')
-            .replaceAll('8', 'B')
-            .replaceAll('3', 'B');
+        // ---------------- MIDDLE (ANGKA SAJA) ----------------
+        String mid = parts[1];
+        mid = fixMiddleDigits(mid);
+        mid = mid.replaceAll(RegExp(r'[A-Z]'), '');
 
-        return "$prefix $mid $suffix".trim();
+        if (!RegExp(r'^\d{1,5}$').hasMatch(mid)) {
+          return t;
+        }
+
+        // ---------------- SUFFIX (HURUF SAJA, OPSIONAL) ------
+        String suffix = '';
+        if (parts.length > 2) {
+          // Gabungkan semua token setelah angka jadi satu suffix
+          suffix = parts.sublist(2).join('');
+          suffix = suffix
+              .replaceAll('0', 'O')
+              .replaceAll('1', 'I')
+              .replaceAll('2', 'Z')
+              .replaceAll('5', 'S')
+              .replaceAll('6', 'G')
+              .replaceAll('8', 'B')
+              .replaceAll(RegExp(r'[^A-Z]'), '');
+        }
+
+        if (suffix.isNotEmpty && !RegExp(r'^[A-Z]{1,4}$').hasMatch(suffix)) {
+          // Kalau suffix kacau (ada digit nyelip, dsb) → buang suffix
+          return '$prefix $mid'.trim();
+        }
+
+        return '$prefix $mid $suffix'.trim();
       }
 
-      final validPrefix = [
+      // -----------------------------------------------------------------------
+      // DAFTAR PREFIX SAH PLAT INDONESIA
+      // -----------------------------------------------------------------------
+      const validPrefix = [
         'BL',
         'BB',
         'BK',
@@ -236,32 +248,24 @@ class OcrIsolatePool {
         'CD',
       ];
 
-      final plateRegex = RegExp(r'^[A-Z]{1,3}[\s\-]?\d{1,5}[\s\-]?[A-Z]{0,4}$');
-
-      String? plate;
-
+      // Coba tiap line yang sudah diurutkan (digit terbanyak dulu)
       for (final raw in lines) {
         final txt = normalize(raw);
-        if (plate == null && plateRegex.hasMatch(txt)) {
-          final prefix = txt.split(RegExp(r'[\s\-]+')).first;
-          if (validPrefix.contains(prefix)) plate = txt;
-        }
+        final parts = txt.split(' ').where((e) => e.isNotEmpty).toList();
+        if (parts.isEmpty) continue;
+
+        final prefix = parts.first;
+        if (!validPrefix.contains(prefix)) continue;
+
+        // Valid & sudah normal → kirim
+        debugPrint('🔍 OCR extracted = $txt');
+        return txt;
       }
 
-      if (plate != null) {
-        final formatted = plate.replaceAll(RegExp(r'\s+'), ' ').trim();
-        debugPrint(
-          isRealtime
-              ? "📸 [Realtime OCR] $formatted"
-              : "🖼️ [Gallery OCR] $formatted",
-        );
-        return formatted;
-      }
-
-      debugPrint("🚫 [Filtered OCR] invalid/low-confidence");
-      return "";
+      // Tidak ada yang valid, tapi kita tetap bisa balikin kandidat terbaik mentah
+      return '';
     } catch (e, st) {
-      debugPrint("❌ OCR error: $e\n$st");
+      debugPrint('❌ OCR ERROR: $e\n$st');
       return null;
     }
   }

@@ -169,7 +169,7 @@ class PlateCameraCaptureBloc
       final cropped = await cropPlateRegion(
         fullJpg,
         detectionRect,
-        marginFactor: 0.3,
+        marginFactor: 0.15,
       );
       if (cropped == null) {
         emit(
