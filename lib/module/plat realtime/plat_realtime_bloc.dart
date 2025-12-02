@@ -1,4 +1,4 @@
-// ignore_for_file: invalid_use_of_visible_for_testing_member, depend_on_referenced_packages
+// ignore_for_file: invalid_use_of_visible_for_testing_member, depend_on_referenced_packages, unreachable_switch_default
 
 import 'dart:async';
 import 'dart:io';
@@ -164,7 +164,12 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
       _ => 'Mati',
     };
 
-    emit(state.copyWith(flashMode: ev.mode, message: '🔦 Flash $label'));
+    emit(
+      state.copyWith(
+        flashMode: ev.mode,
+        message: '🔦 Flash $label',
+      ),
+    );
   }
 
   Future<void> _onStopCamera(
@@ -246,7 +251,7 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
       final bounds = frameSize ?? Size.zero;
       final scaledRect = bounds.isEmpty
           ? rawRect
-          : expandRectWithinBounds(rawRect, bounds, marginFactor: 0.15);
+          : expandRectWithinBounds(rawRect, bounds, marginFactor: 0.2);
       _smoothBox = _blend(scaledRect, _smoothBox);
 
       if (now.difference(_lastOcr).inMilliseconds > _intervalOcr) {
@@ -386,7 +391,7 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
   }
 
   Future<Uint8List?> _crop(Uint8List jpeg, Rect rect) async {
-    return cropPlateRegion(jpeg, rect, marginFactor: 0.25, quality: 100);
+    return cropPlateRegionSync(jpeg, rect, marginFactor: 0.25, quality: 90);
   }
 
   Rect _blend(Rect n, Rect? p, {double a = 0.3}) {
@@ -419,7 +424,9 @@ class PlateRealtimeBloc extends Bloc<PlateRealtimeEvent, PlateRealtimeState> {
         return 180;
       case DeviceOrientation.landscapeRight:
         return 270;
-      }
+      default:
+        return 0;
+    }
   }
 
   @override
