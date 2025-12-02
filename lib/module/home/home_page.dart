@@ -7,7 +7,6 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:vehicle_identification_number/module/home/view_data_page.dart';
 import 'package:vehicle_identification_number/module/plat%20capture/plat_capture_page.dart';
-import 'package:vehicle_identification_number/module/plat%20realtime/plat_realtime_page.dart';
 import 'package:vehicle_identification_number/module/plat_capture_mlkit/plat_capture_mlkit_page.dart';
 
 class HomePage extends StatefulWidget {
@@ -92,7 +91,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   ),
                   const SizedBox(height: 10),
                   const Text(
-                    "Realtime Vehicle Plate Detection with AI",
+                    "Vehicle Plate Detection with AI",
                     style: TextStyle(
                       fontSize: 15.5,
                       color: Colors.white70,
@@ -134,7 +133,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     child: _MainButton(
                       title: "Scan dengan google gemini",
                       subtitle: "Scan menggunakan Google Gemini (ONLINE)",
-                      icon: Icons.camera_enhance_rounded,
+                      icon: Icons.camera_front_rounded,
                       color1: const Color(0xFFF59E0B),
                       color2: const Color(0xFFFBBF24),
                       onTap: () {
@@ -158,22 +157,22 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                       },
                     ),
                   ),
-                  const SizedBox(height: 18),
+                  // const SizedBox(height: 18),
 
-                  _MainButton(
-                    title: "Scan secara realtime",
-                    subtitle:
-                        "Scan secara realtime menggunakan Google ML Kit (OFFLINE)",
-                    icon: Icons.camera_enhance_rounded,
-                    color1: const Color.fromARGB(255, 157, 144, 122),
-                    color2: const Color.fromARGB(255, 114, 102, 72),
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const PlateRealtimePage(),
-                      ),
-                    ),
-                  ),
+                  // _MainButton(
+                  //   title: "Scan secara realtime",
+                  //   subtitle:
+                  //       "Scan secara realtime menggunakan Google ML Kit (OFFLINE)",
+                  //   icon: Icons.adf_scanner_rounded,
+                  //   color1: const Color.fromARGB(255, 172, 172, 172),
+                  //   color2: const Color.fromARGB(255, 6, 5, 3),
+                  //   onTap: () => Navigator.push(
+                  //     context,
+                  //     MaterialPageRoute(
+                  //       builder: (_) => const PlateRealtimePage(),
+                  //     ),
+                  //   ),
+                  // ),
                   const SizedBox(height: 18),
 
                   _MainButton(

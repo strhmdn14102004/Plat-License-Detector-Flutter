@@ -9,6 +9,8 @@ class InitializeRealtimeCamera extends PlateRealtimeEvent {
 
 class DisposeRealtimeCamera extends PlateRealtimeEvent {}
 
+class UnfreezeRealtimeScanner extends PlateRealtimeEvent {}
+
 class ChangeRealtimeFlash extends PlateRealtimeEvent {
   final FlashMode mode;
   ChangeRealtimeFlash(this.mode);

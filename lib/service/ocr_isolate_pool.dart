@@ -54,22 +54,77 @@ class OcrIsolatePool {
     }
   }
 
-  String _clean(String raw) {
-    return raw
-        .replaceAll(RegExp(r'[^A-Z0-9 ]'), '')
-        .replaceAll("PLAT", "")
-        .replaceAll("PLATE", "")
-        .trim()
-        .toUpperCase();
+  String cleanPlateRaw(String raw) {
+    raw = raw.toUpperCase();
+
+    raw = raw.replaceAll(RegExp(r'[^A-Z0-9 ]'), ' ');
+
+    raw = raw.replaceAll(RegExp(r'\s+'), ' ');
+
+    raw = raw.replaceAll("PLAT", "");
+    raw = raw.replaceAll("PLATE", "");
+
+    return raw.trim();
+  }
+
+  bool _looksLikePlate(String text) {
+    final cleaned = cleanPlateRaw(text);
+    if (cleaned.isEmpty) return false;
+
+    final hasLetter = cleaned.contains(RegExp(r'[A-Z]'));
+    final hasDigit = cleaned.contains(RegExp(r'[0-9]'));
+    if (!hasLetter || !hasDigit) return false;
+
+    final parts = cleaned.split(' ').where((e) => e.isNotEmpty).toList();
+    if (parts.length < 2) return false;
+
+    return true;
+  }
+
+  String _pickBestFromRecognized(RecognizedText result) {
+    String? best;
+    int bestScore = -1;
+
+    void consider(String src, {int weight = 1}) {
+      final cleaned = cleanPlateRaw(src);
+      if (cleaned.isEmpty) return;
+      if (!_looksLikePlate(cleaned)) return;
+
+      final letters = RegExp(r'[A-Z]').allMatches(cleaned).length;
+      final digits = RegExp(r'[0-9]').allMatches(cleaned).length;
+
+      final score =
+          letters +
+          digits +
+          (letters > 0 ? 2 : 0) +
+          (digits > 0 ? 2 : 0) +
+          weight;
+
+      if (score > bestScore) {
+        bestScore = score;
+        best = cleaned;
+      }
+    }
+
+    for (final block in result.blocks) {
+      for (final line in block.lines) {
+        consider(line.text, weight: 3);
+      }
+    }
+
+    consider(result.text, weight: 1);
+
+    return best ?? cleanPlateRaw(result.text);
   }
 
   String normalizePlate(String raw) {
-    raw = raw.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9 ]'), '');
+    raw = raw.toUpperCase().trim();
+    raw = cleanPlateRaw(raw);
 
-    final parts = raw.split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toList();
-    if (parts.length < 2) return raw;
+    final parts = raw.split(" ").where((e) => e.isNotEmpty).toList();
+    if (parts.isEmpty) return raw;
 
-    String prefix = parts[0];
+    String prefix = parts.isNotEmpty ? parts[0] : "";
     String middle = parts.length > 1 ? parts[1] : "";
     String suffix = parts.length > 2 ? parts.sublist(2).join("") : "";
 
@@ -82,15 +137,28 @@ class OcrIsolatePool {
     suffix = suffix.replaceAll(RegExp(r'[^A-Z]'), '');
     if (suffix.length > 3) suffix = suffix.substring(0, 3);
 
+    prefix = prefix
+        .replaceAll("0", "O")
+        .replaceAll("1", "I")
+        .replaceAll("2", "Z")
+        .replaceAll("4", "A")
+        .replaceAll("5", "S")
+        .replaceAll("8", "B");
+
+    suffix = suffix
+        .replaceAll("0", "O")
+        .replaceAll("1", "I")
+        .replaceAll("2", "Z")
+        .replaceAll("4", "A")
+        .replaceAll("5", "S")
+        .replaceAll("6", "G")
+        .replaceAll("8", "B");
+
+    middle = middle.replaceAll(RegExp(r'[^0-9]'), '');
+
+    if (prefix.isEmpty) prefix = "B";
+    if (middle.isEmpty) middle = "1";
     if (suffix.isEmpty) suffix = "A";
-
-    if (raw.length > 15) {
-      raw = raw.substring(0, 15);
-    }
-
-    if (suffix.length > 3) {
-      suffix = suffix.substring(0, 3);
-    }
 
     return "$prefix $middle $suffix".trim();
   }
@@ -99,19 +167,15 @@ class OcrIsolatePool {
     try {
       final dir = await getTemporaryDirectory();
       final file = io.File("${dir.path}/ocr_mlkit.jpg");
-
       await file.writeAsBytes(jpegBytes);
 
       final input = InputImage.fromFilePath(file.path);
-
       final result = await _textRecognizer.processImage(input);
-      final rawText = result.text.trim();
 
-      if (rawText.isEmpty) return "TIDAK TERBACA";
+      final candidate = _pickBestFromRecognized(result);
+      if (candidate.isEmpty) return "TIDAK TERBACA";
 
-      final cleaned = _clean(rawText);
-      final normalized = normalizePlate(cleaned);
-
+      final normalized = normalizePlate(candidate);
       return normalized;
     } catch (e) {
       debugPrint("❌ MLKit OCR Error: $e");
@@ -131,8 +195,7 @@ class OcrIsolatePool {
               role: "user",
               parts: [
                 gai.TextPart("""
-Baca plat nomor kendaraan pada gambar.
-Jawab hanya format plat Indonesia.
+Baca plat nomor kendaraan Indonesia.
 Jika tidak terbaca: TIDAK TERBACA
 """),
                 gai.InlineDataPart(
@@ -144,14 +207,12 @@ Jika tidak terbaca: TIDAK TERBACA
         ),
       );
 
-      String result = "";
+      String resultText = "";
       for (final p in response.candidates?.firstOrNull?.content?.parts ?? []) {
-        if (p is gai.TextPart) {
-          result += p.text;
-        }
+        if (p is gai.TextPart) resultText += p.text;
       }
 
-      return _clean(result);
+      return cleanPlateRaw(resultText);
     } catch (_) {
       return "TIDAK TERBACA";
     }
@@ -160,22 +221,18 @@ Jika tidak terbaca: TIDAK TERBACA
   Future<String?> _process(_OcrJob job) async {
     try {
       final jpeg = job.jpeg;
-
       final online = await _hasInternet();
 
       if (online) {
         final gemini = await _runGemini(jpeg);
-
         if (gemini != "TIDAK TERBACA" && gemini.length >= 5) {
           debugPrint("✨ OCR via Gemini: $gemini");
-          return gemini;
+          return normalizePlate(gemini);
         }
-
-        debugPrint("⚠️ Gemini gagal → fallback MLKit...");
       }
 
+      debugPrint("⚠️ Gemini gagal → fallback MLKit...");
       final mlkit = await runMlKit(jpeg);
-      debugPrint("📱 OCR via ML Kit: $mlkit");
       return mlkit;
     } catch (e, st) {
       debugPrint("❌ OCR PROCESS ERROR: $e\n$st");

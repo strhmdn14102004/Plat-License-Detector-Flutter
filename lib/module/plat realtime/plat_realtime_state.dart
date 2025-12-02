@@ -33,4 +33,26 @@ class PlateRealtimeState {
     fullFrame: null,
     message: "Menyiapkan kamera...",
   );
+
+  PlateRealtimeState copy({
+    bool? isReady,
+    bool? isProcessing,
+    CameraController? controller,
+    String? text,
+    FlashMode? flash,
+    Uint8List? cropped,
+    Uint8List? fullFrame,
+    String? message,
+  }) {
+    return PlateRealtimeState(
+      isReady: isReady ?? this.isReady,
+      isProcessing: isProcessing ?? this.isProcessing,
+      controller: controller ?? this.controller,
+      text: text,
+      flash: flash ?? this.flash,
+      cropped: cropped ?? this.cropped,
+      fullFrame: fullFrame ?? this.fullFrame,
+      message: message ?? this.message,
+    );
+  }
 }

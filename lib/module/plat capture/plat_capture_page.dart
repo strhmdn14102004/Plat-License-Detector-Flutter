@@ -91,7 +91,7 @@ class _PlateCameraCapturePageState extends State<PlateCameraCapturePage>
             backgroundColor: const Color(0xFF0B1220),
             appBar: AppBar(
               backgroundColor: Colors.transparent,
-              title: const Text("Mode Kamera Scanner"),
+              title: const Text("Mode Kamera Scanner AI"),
               centerTitle: true,
             ),
             body: SafeArea(
