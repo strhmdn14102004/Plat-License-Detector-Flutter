@@ -118,24 +118,19 @@ class OcrIsolatePool {
   }
 
   String normalizePlate(String raw) {
-    raw = raw.toUpperCase().trim();
     raw = cleanPlateRaw(raw);
+    if (raw.isEmpty) return "TIDAK TERBACA";
 
-    final parts = raw.split(" ").where((e) => e.isNotEmpty).toList();
-    if (parts.isEmpty) return raw;
+    final parts = raw.split(' ').where((e) => e.isNotEmpty).toList();
+    if (parts.isEmpty) return "TIDAK TERBACA";
 
-    String prefix = parts.isNotEmpty ? parts[0] : "";
+    String prefix = parts[0];
     String middle = parts.length > 1 ? parts[1] : "";
     String suffix = parts.length > 2 ? parts.sublist(2).join("") : "";
 
     prefix = prefix.replaceAll(RegExp(r'[^A-Z]'), '');
-    if (prefix.length > 2) prefix = prefix.substring(0, 2);
-
     middle = middle.replaceAll(RegExp(r'[^0-9]'), '');
-    if (middle.length > 4) middle = middle.substring(0, 4);
-
     suffix = suffix.replaceAll(RegExp(r'[^A-Z]'), '');
-    if (suffix.length > 3) suffix = suffix.substring(0, 3);
 
     prefix = prefix
         .replaceAll("0", "O")
@@ -154,11 +149,83 @@ class OcrIsolatePool {
         .replaceAll("6", "G")
         .replaceAll("8", "B");
 
-    middle = middle.replaceAll(RegExp(r'[^0-9]'), '');
+    const validPrefix = {
+      "A",
+      "B",
+      "D",
+      "E",
+      "F",
+      "T",
+      "Z",
+      "G",
+      "H",
+      "K",
+      "R",
+      "AA",
+      "AB",
+      "AD",
+      "AE",
+      "N",
+      "S",
+      "W",
+      "L",
+      "M",
+      "DK",
+      "DR",
+      "DH",
+      "EA",
+      "BA",
+      "BB",
+      "BD",
+      "BE",
+      "BG",
+      "BH",
+      "BK",
+      "BL",
+      "BM",
+      "BN",
+      "BP",
+      "DA",
+      "KB",
+      "KH",
+      "KT",
+      "KU",
+      "KX",
+      "DB",
+      "DD",
+      "DM",
+      "DN",
+      "DT",
+      "DW",
+      "DC",
+      "PA",
+      "PB",
+      "DE",
+    };
 
-    if (prefix.isEmpty) prefix = "B";
-    if (middle.isEmpty) middle = "1";
-    if (suffix.isEmpty) suffix = "A";
+    if (prefix.length > 2) prefix = prefix.substring(0, 2);
+
+    if (!validPrefix.contains(prefix)) {
+      if (prefix.isNotEmpty && validPrefix.contains(prefix[0])) {
+        prefix = prefix[0];
+      } else if (prefix.length > 1 && validPrefix.contains(prefix[1])) {
+        prefix = prefix[1];
+      } else {
+        prefix = "B";
+      }
+    }
+
+    if (middle.isEmpty) {
+      middle = "1";
+    } else if (middle.length > 4) {
+      middle = middle.substring(0, 4);
+    }
+
+    if (suffix.isEmpty) {
+      suffix = "A";
+    } else if (suffix.length > 3) {
+      suffix = suffix.substring(0, 3);
+    }
 
     return "$prefix $middle $suffix".trim();
   }
