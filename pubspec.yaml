@@ -1,7 +1,7 @@
 name: vehicle_identification_number
 description: "Project Flutter application for Vehicle Identification Number (VIN) detection using camera and ML models."
 publish_to: "none"
-version: 2.0.1
+version: 2.0.3
 
 environment:
   sdk: ^3.9.2
@@ -17,17 +17,14 @@ dependencies:
   googleai_dart: ^1.1.0
   google_mlkit_text_recognition: ^0.15.0
   path_provider: 2.1.5
-  path: 1.9.1
+  path: ^1.9.1
   hive_flutter: 1.1.0
   device_info_plus: 12.2.0
-  file_picker: 10.3.6
-  shimmer: 3.0.0
   connectivity_plus: ^7.0.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^6.0.0
 
 flutter:
   uses-material-design: true

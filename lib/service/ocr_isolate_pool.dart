@@ -14,11 +14,10 @@ class OcrIsolatePool {
   static const String _apiKey = "AIzaSyAaXIBhfrhi2lwwiekFdTsdKt-8RWVCZGI";
 
   late final gai.GoogleAIClient _client;
-
   final _queue = StreamController<_OcrJob>();
   final _onResult = StreamController<String>.broadcast();
-  bool _running = false;
 
+  bool _running = false;
   final _textRecognizer = TextRecognizer();
 
   Stream<String> get results => _onResult.stream;
@@ -56,29 +55,49 @@ class OcrIsolatePool {
 
   String cleanPlateRaw(String raw) {
     raw = raw.toUpperCase();
-
     raw = raw.replaceAll(RegExp(r'[^A-Z0-9 ]'), ' ');
-
     raw = raw.replaceAll(RegExp(r'\s+'), ' ');
 
+    raw = raw.replaceAll("MASA BERLAKU", "");
+    raw = raw.replaceAll("BERLAKU", "");
+    raw = raw.replaceAll("BERL", "");
     raw = raw.replaceAll("PLAT", "");
     raw = raw.replaceAll("PLATE", "");
 
     return raw.trim();
   }
 
+  String extractPlateCore(String raw) {
+    raw = cleanPlateRaw(raw);
+    final tokens = raw.split(' ').where((e) => e.isNotEmpty).toList();
+
+    if (tokens.length < 2) return raw;
+
+    tokens.removeWhere((t) => RegExp(r'^[0-9]{2}$').hasMatch(t));
+    tokens.removeWhere((t) => RegExp(r'^[0-9]{2,4}$').hasMatch(t));
+
+    if (tokens.length < 2) return raw;
+
+    if (!RegExp(r'^[A-Z]{1,2}$').hasMatch(tokens[0])) return raw;
+
+    final middle = tokens[1].replaceAll(RegExp(r'[^0-9]'), '');
+    if (!RegExp(r'^[0-9]{1,4}$').hasMatch(middle)) return raw;
+
+    String suffix = "";
+    if (tokens.length >= 3) {
+      final s = tokens[2].replaceAll(RegExp(r'[^A-Z0-9]'), '');
+      if (RegExp(r'^[A-Z0-9]{1,3}$').hasMatch(s)) suffix = s;
+    }
+
+    return suffix.isEmpty
+        ? "${tokens[0]} $middle"
+        : "${tokens[0]} $middle $suffix";
+  }
+
   bool _looksLikePlate(String text) {
-    final cleaned = cleanPlateRaw(text);
-    if (cleaned.isEmpty) return false;
-
-    final hasLetter = cleaned.contains(RegExp(r'[A-Z]'));
-    final hasDigit = cleaned.contains(RegExp(r'[0-9]'));
-    if (!hasLetter || !hasDigit) return false;
-
-    final parts = cleaned.split(' ').where((e) => e.isNotEmpty).toList();
-    if (parts.length < 2) return false;
-
-    return true;
+    text = extractPlateCore(text);
+    final parts = text.split(' ').where((e) => e.isNotEmpty).toList();
+    return parts.length >= 2;
   }
 
   String _pickBestFromRecognized(RecognizedText result) {
@@ -86,7 +105,7 @@ class OcrIsolatePool {
     int bestScore = -1;
 
     void consider(String src, {int weight = 1}) {
-      final cleaned = cleanPlateRaw(src);
+      final cleaned = extractPlateCore(src);
       if (cleaned.isEmpty) return;
       if (!_looksLikePlate(cleaned)) return;
 
@@ -117,117 +136,58 @@ class OcrIsolatePool {
     return best ?? cleanPlateRaw(result.text);
   }
 
-  String normalizePlate(String raw) {
+  String fixQHeuristic(String suffix) {
+    if (suffix.isEmpty) return suffix;
+
+    String s = suffix.toUpperCase();
+
+    if (s == "OO") return "QO";
+
+    if (RegExp(r'^[A-Z]{2}O$').hasMatch(s)) {
+      return "${s.substring(0, 2)}Q";
+    }
+
+    if (s.length == 1 && s == "O") return "Q";
+
+    if (s.endsWith("0")) {
+      return "${s.substring(0, s.length - 1)}Q";
+    }
+
+    if (s == "O0") return "QO";
+
+    return s;
+  }
+
+  String fixSuffix(String suffix) {
+    if (suffix.isEmpty) return "";
+
+    String s = suffix.toUpperCase();
+
+    s = s.replaceAll("0", "O");
+    s = s.replaceAll("1", "I");
+    s = s.replaceAll("8", "B");
+    s = s.replaceAll("6", "G");
+
+    return s;
+  }
+
+  String normalizePlate(String raw, {bool fromGemini = false}) {
     raw = cleanPlateRaw(raw);
-    if (raw.isEmpty) return "TIDAK TERBACA";
+    raw = extractPlateCore(raw);
 
-    final parts = raw.split(' ').where((e) => e.isNotEmpty).toList();
-    if (parts.isEmpty) return "TIDAK TERBACA";
+    final parts = raw.split(" ");
+    if (parts.length < 2) return raw;
 
-    String prefix = parts[0];
-    String middle = parts.length > 1 ? parts[1] : "";
-    String suffix = parts.length > 2 ? parts.sublist(2).join("") : "";
+    final prefix = parts[0].replaceAll(RegExp(r'[^A-Z]'), '');
+    final middle = parts[1].replaceAll(RegExp(r'[^0-9]'), '');
 
-    prefix = prefix.replaceAll(RegExp(r'[^A-Z]'), '');
-    middle = middle.replaceAll(RegExp(r'[^0-9]'), '');
-    suffix = suffix.replaceAll(RegExp(r'[^A-Z]'), '');
-
-    prefix = prefix
-        .replaceAll("0", "O")
-        .replaceAll("1", "I")
-        .replaceAll("2", "Z")
-        .replaceAll("4", "A")
-        .replaceAll("5", "S")
-        .replaceAll("8", "B");
-
-    suffix = suffix
-        .replaceAll("0", "O")
-        .replaceAll("1", "I")
-        .replaceAll("2", "Z")
-        .replaceAll("4", "A")
-        .replaceAll("5", "S")
-        .replaceAll("6", "G")
-        .replaceAll("8", "B");
-
-    const validPrefix = {
-      "A",
-      "B",
-      "D",
-      "E",
-      "F",
-      "T",
-      "Z",
-      "G",
-      "H",
-      "K",
-      "R",
-      "AA",
-      "AB",
-      "AD",
-      "AE",
-      "N",
-      "S",
-      "W",
-      "L",
-      "M",
-      "DK",
-      "DR",
-      "DH",
-      "EA",
-      "BA",
-      "BB",
-      "BD",
-      "BE",
-      "BG",
-      "BH",
-      "BK",
-      "BL",
-      "BM",
-      "BN",
-      "BP",
-      "DA",
-      "KB",
-      "KH",
-      "KT",
-      "KU",
-      "KX",
-      "DB",
-      "DD",
-      "DM",
-      "DN",
-      "DT",
-      "DW",
-      "DC",
-      "PA",
-      "PB",
-      "DE",
-    };
-
-    if (prefix.length > 2) prefix = prefix.substring(0, 2);
-
-    if (!validPrefix.contains(prefix)) {
-      if (prefix.isNotEmpty && validPrefix.contains(prefix[0])) {
-        prefix = prefix[0];
-      } else if (prefix.length > 1 && validPrefix.contains(prefix[1])) {
-        prefix = prefix[1];
-      } else {
-        prefix = "B";
-      }
+    String suffix = "";
+    if (parts.length >= 3) {
+      suffix = fixSuffix(parts[2]);
+      suffix = fixQHeuristic(suffix);
     }
 
-    if (middle.isEmpty) {
-      middle = "1";
-    } else if (middle.length > 4) {
-      middle = middle.substring(0, 4);
-    }
-
-    if (suffix.isEmpty) {
-      suffix = "A";
-    } else if (suffix.length > 3) {
-      suffix = suffix.substring(0, 3);
-    }
-
-    return "$prefix $middle $suffix".trim();
+    return suffix.isEmpty ? "$prefix $middle" : "$prefix $middle $suffix";
   }
 
   Future<String> runMlKit(Uint8List jpegBytes) async {
@@ -240,13 +200,12 @@ class OcrIsolatePool {
       final result = await _textRecognizer.processImage(input);
 
       final candidate = _pickBestFromRecognized(result);
-      if (candidate.isEmpty) return "TIDAK TERBACA";
+      if (candidate.isEmpty) return "DUH GAKEBACA NIH MAS FELIX :(";
 
-      final normalized = normalizePlate(candidate);
-      return normalized;
+      return normalizePlate(candidate, fromGemini: false);
     } catch (e) {
       debugPrint("❌ MLKit OCR Error: $e");
-      return "TIDAK TERBACA";
+      return "DUH GAKEBACA NIH MAS FELIX :(";
     }
   }
 
@@ -262,8 +221,9 @@ class OcrIsolatePool {
               role: "user",
               parts: [
                 gai.TextPart("""
-Baca plat nomor kendaraan Indonesia.
-Jika tidak terbaca: TIDAK TERBACA
+Ambil HANYA plat nomor Indonesia (huruf + angka + suffix).
+Abaikan masa berlaku atau teks lain.
+Jika tidak terbaca → DUH GAKEBACA NIH MAS FELIX :(
 """),
                 gai.InlineDataPart(
                   gai.Blob(mimeType: "image/jpeg", data: base64Image),
@@ -281,29 +241,29 @@ Jika tidak terbaca: TIDAK TERBACA
 
       return cleanPlateRaw(resultText);
     } catch (_) {
-      return "TIDAK TERBACA";
+      return "DUH GAKEBACA NIH MAS FELIX :(";
     }
   }
 
   Future<String?> _process(_OcrJob job) async {
     try {
       final jpeg = job.jpeg;
-      final online = await _hasInternet();
 
+      final online = await _hasInternet();
       if (online) {
-        final gemini = await _runGemini(jpeg);
-        if (gemini != "TIDAK TERBACA" && gemini.length >= 5) {
-          debugPrint("✨ OCR via Gemini: $gemini");
-          return normalizePlate(gemini);
+        final gem = await _runGemini(jpeg);
+
+        if (gem != "DUH GAKEBACA NIH MAS FELIX :(" && gem.length >= 4) {
+          debugPrint("✨ Gemini RAW: $gem");
+          return normalizePlate(gem, fromGemini: true);
         }
       }
 
-      debugPrint("⚠️ Gemini gagal → fallback MLKit...");
-      final mlkit = await runMlKit(jpeg);
-      return mlkit;
+      debugPrint("⚠️ Gemini gagal → fallback MLKit");
+      return await runMlKit(jpeg);
     } catch (e, st) {
       debugPrint("❌ OCR PROCESS ERROR: $e\n$st");
-      return "TIDAK TERBACA";
+      return "DUH GAKEBACA NIH MAS FELIX :(";
     }
   }
 
