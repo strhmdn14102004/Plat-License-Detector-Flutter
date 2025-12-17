@@ -1,3 +1,5 @@
+// ignore_for_file: always_specify_types
+
 import 'dart:io';
 
 import 'package:anpr/model/plate_result.dart';
@@ -18,6 +20,52 @@ class AnprBloc extends Bloc<AnprEvent, AnprState> {
   late final YoloIsolatePool _yolo;
   late final Uint8List _yoloModel;
 
+  /// ===============================
+  /// 🇮🇩 PREFIX PLAT RESMI INDONESIA
+  /// ===============================
+  static const Set<String> validPlatePrefixes = {
+    // 1 huruf
+    'A',
+    'B',
+    'D',
+    'E',
+    'F',
+    'G',
+    'H',
+    'K',
+    'L',
+    'M',
+    'N',
+    'P',
+    'R',
+    'S',
+    'T',
+    'W',
+    'Z',
+
+    // 2 huruf
+    'AA', 'AB', 'AD', 'AE', 'AG',
+    'BA', 'BB', 'BD', 'BE', 'BG', 'BH', 'BK', 'BL', 'BM', 'BN', 'BP',
+    'DA',
+    'DB',
+    'DC',
+    'DD',
+    'DE',
+    'DG',
+    'DH',
+    'DK',
+    'DL',
+    'DM',
+    'DN',
+    'DP',
+    'DR',
+    'DT',
+    'DW',
+    'EA', 'EB', 'ED',
+    'KB', 'KH', 'KT', 'KU',
+    'PA', 'PB',
+  };
+
   AnprBloc() : super(AnprInitial()) {
     on<PickImageEvent>(_onPickImage);
     on<ProcessImageEvent>(_onProcessImage);
@@ -36,6 +84,9 @@ class AnprBloc extends Bloc<AnprEvent, AnprState> {
     await _yolo.init(_yoloModel, 640, 0.4);
   }
 
+  // =============================================================
+  // 📸 PICK IMAGE
+  // =============================================================
   Future<void> _onPickImage(
     PickImageEvent event,
     Emitter<AnprState> emit,
@@ -55,6 +106,9 @@ class AnprBloc extends Bloc<AnprEvent, AnprState> {
     add(ProcessImageEvent(image.path));
   }
 
+  // =============================================================
+  // 🧠 YOLO DETECTION
+  // =============================================================
   Future<void> _onProcessImage(
     ProcessImageEvent event,
     Emitter<AnprState> emit,
@@ -72,7 +126,7 @@ class AnprBloc extends Bloc<AnprEvent, AnprState> {
     }
 
     detections.sort((a, b) => b.score.compareTo(a.score));
-    final box = detections.first;
+    final YoloResult box = detections.first;
 
     final cropPath = await _cropByBox(event.imagePath, box);
     if (cropPath == null) {
@@ -85,7 +139,10 @@ class AnprBloc extends Bloc<AnprEvent, AnprState> {
     await _runOcr(cropPath, event.imagePath, emit);
   }
 
-  Future<String?> _cropByBox(String imagePath, dynamic box) async {
+  // =============================================================
+  // ✂️ AUTO CROP
+  // =============================================================
+  Future<String?> _cropByBox(String imagePath, YoloResult box) async {
     final bytes = await File(imagePath).readAsBytes();
     final raw = img.decodeImage(bytes);
     if (raw == null) return null;
@@ -99,11 +156,14 @@ class AnprBloc extends Bloc<AnprEvent, AnprState> {
 
     final cropped = img.copyCrop(image, x: x, y: y, width: w, height: h);
 
-    final out = imagePath.replaceFirst('.jpg', '_auto.jpg');
+    final out = _appendSuffix(imagePath, '_auto');
     await File(out).writeAsBytes(img.encodeJpg(cropped, quality: 100));
     return out;
   }
 
+  // =============================================================
+  // ✂️ MANUAL CROP SUBMIT
+  // =============================================================
   Future<void> _onManualCropSubmit(
     SubmitManualCropEvent event,
     Emitter<AnprState> emit,
@@ -119,6 +179,9 @@ class AnprBloc extends Bloc<AnprEvent, AnprState> {
     await _runOcr(croppedPath, event.imagePath, emit);
   }
 
+  // =============================================================
+  // 🔍 OCR
+  // =============================================================
   Future<void> _runOcr(
     String croppedPath,
     String originalPath,
@@ -131,23 +194,21 @@ class AnprBloc extends Bloc<AnprEvent, AnprState> {
       if (kDebugMode) {
         print('📝 OCR Full Text: ${text.text}');
       }
-      if (kDebugMode) {
-        print('📝 OCR Blocks: ${text.blocks.length}');
-      }
 
-      if (text.text.isEmpty) {
-        emit(AnprError('Tidak ada teks terdeteksi. Coba crop lebih presisi.'));
+      // OCR KOSONG → MANUAL CROP
+      if (text.text.trim().isEmpty) {
+        emit(
+          AnprManualCrop(imagePath: originalPath, initialQuad: _defaultQuad()),
+        );
         return;
       }
 
       final plate = _extractPlate(text.text);
+
+      // TIDAK VALID → MANUAL CROP
       if (plate == null) {
         emit(
-          AnprError(
-            'Plat tidak terbaca.\n'
-            'Text terdeteksi: ${text.text.replaceAll('\n', ' ')}\n'
-            'Coba crop ulang dengan lebih presisi.',
-          ),
+          AnprManualCrop(imagePath: originalPath, initialQuad: _defaultQuad()),
         );
         return;
       }
@@ -164,13 +225,15 @@ class AnprBloc extends Bloc<AnprEvent, AnprState> {
         ),
       );
     } catch (e) {
-      if (kDebugMode) {
-        print('❌ OCR Error: $e');
-      }
-      emit(AnprError('Error OCR: $e'));
+      emit(
+        AnprManualCrop(imagePath: originalPath, initialQuad: _defaultQuad()),
+      );
     }
   }
 
+  // =============================================================
+  // ✂️ MANUAL CROP ENGINE
+  // =============================================================
   Future<String?> _cropByQuad(String path, List<Offset> quad) async {
     final bytes = await File(path).readAsBytes();
     final raw = img.decodeImage(bytes);
@@ -206,9 +269,89 @@ class AnprBloc extends Bloc<AnprEvent, AnprState> {
 
     crop = img.adjustColor(crop, contrast: 1.2, brightness: 1.05);
 
-    final out = path.replaceFirst('.jpg', '_manual.jpg');
+    final out = _appendSuffix(path, '_manual');
     await File(out).writeAsBytes(img.encodeJpg(crop, quality: 100));
     return out;
+  }
+
+  // =============================================================
+  // 🇮🇩 PLATE VALIDATOR (PERPOL 7/2021)
+  // =============================================================
+  String? _extractPlate(String text) {
+    // 1. CLEANING / NORMALISASI
+    // Hapus simbol aneh, sisakan Huruf, Angka, dan Spasi
+    final normalized = text
+        .toUpperCase()
+        .replaceAll(RegExp(r'[^A-Z0-9]'), ' ') // Ubah simbol jadi spasi
+        .replaceAll(RegExp(r'\s+'), ' ') // Satukan spasi berlebih
+        .trim();
+
+    if (kDebugMode) {
+      print('🔍 Normalized OCR: $normalized');
+    }
+
+    // 2. REGEX DEFINITIONS
+
+    // A. PLAT KHUSUS (RI / CD / CC)
+    // Format: Kode (RI/CD/CC) + Spasi + Angka (1-9999, TIDAK BOLEH 0 DI DEPAN)
+    // Contoh: RI 1, CD 12, RI 42
+    final specialPattern = RegExp(r'\b(RI|CD|CC)\s+([1-9][0-9]{0,3})\b');
+
+    // B. PLAT UMUM (SIPIL/DINAS)
+    // Format: Kode Wilayah + Spasi + Angka + (Opsional) Huruf Belakang
+    // Penjelasan Regex Angka [1-9][0-9]{0,3}:
+    // - [1-9]      : Digit pertama WAJIB 1-9 (Mencegah "0124")
+    // - [0-9]{0,3} : Diikuti 0 sampai 3 digit angka apa saja (0-9)
+    // Contoh Valid: F 1, B 1234 KCA
+    // Contoh Invalid: F 01, B 0123 ABC
+    final standardPattern = RegExp(
+      r'\b([A-Z]{1,2})\s+([1-9][0-9]{0,3})(?:\s+([A-Z]{1,3}))?\b',
+    );
+
+    // 3. EKSEKUSI PENCOCOKAN
+
+    // Cek Prioritas 1: Plat Khusus (RI/CD)
+    final specialMatch = specialPattern.firstMatch(normalized);
+    if (specialMatch != null) {
+      // Group 0 mengambil full string yang cocok (misal: "RI 1")
+      final result = specialMatch.group(0);
+      if (kDebugMode) print('✅ Special plate found: $result');
+      return result;
+    }
+
+    // Cek Prioritas 2: Plat Umum (Standard)
+    // Kita loop semua kemungkinan match untuk memverifikasi Kode Wilayah
+    for (final match in standardPattern.allMatches(normalized)) {
+      final prefix = match.group(1)!; // Kode Wilayah (F, B, DK)
+      final number = match.group(2)!; // Nomor (Pasti tidak diawali 0)
+      final suffix = match.group(
+        3,
+      ); // Huruf Belakang (Bisa null untuk Plat Dinas F 1)
+
+      // Validasi Prefix harus ada di daftar Samsat (validPlatePrefixes)
+      // Pastikan set 'validPlatePrefixes' Anda sudah lengkap di bagian atas Class
+      if (!validPlatePrefixes.contains(prefix)) {
+        if (kDebugMode) {
+          print('❌ Invalid prefix found: $prefix in ${match.group(0)}');
+        }
+        continue;
+      }
+
+      // Gabungkan hasil yang bersih
+      // join(' ') akan otomatis memberi spasi antar elemen
+      final plate = [prefix, number, if (suffix != null) suffix].join(' ');
+
+      if (kDebugMode) {
+        print('✅ Valid standard plate: $plate');
+      }
+
+      return plate;
+    }
+
+    if (kDebugMode) {
+      print('❌ No valid Indonesian plate found');
+    }
+    return null;
   }
 
   List<Offset> _defaultQuad() => const [
@@ -218,48 +361,9 @@ class AnprBloc extends Bloc<AnprEvent, AnprState> {
     Offset(0.2, 0.6),
   ];
 
-  String? _extractPlate(String text) {
-    final normalized = text
-        .toUpperCase()
-        .replaceAll('\n', ' ')
-        .replaceAll(RegExp(r'[^A-Z0-9 ]'), ' ')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
-
-    if (kDebugMode) {
-      print('🔍 Normalized OCR: $normalized');
-    }
-
-    final riPattern = RegExp(r'\bRI\s*\d{1,2}\b');
-    final riMatch = riPattern.firstMatch(normalized);
-    if (riMatch != null) {
-      final plate = riMatch.group(0)!.replaceAll(RegExp(r'\s+'), ' ');
-      if (kDebugMode) {
-        print('🇮🇩 RI Plate detected: $plate');
-      }
-      return plate;
-    }
-
-    final generalPatterns = [
-      RegExp(r'\b[A-Z]{1,2}\s*\d{1,4}\s*[A-Z]{1,3}\b'),
-      RegExp(r'\b[A-Z]{1,2}\s*\d{1,4}\b'),
-    ];
-
-    for (final pattern in generalPatterns) {
-      final match = pattern.firstMatch(normalized);
-      if (match != null) {
-        final plate = match.group(0)!.replaceAll(RegExp(r'\s+'), ' ');
-        if (kDebugMode) {
-          print('✅ Plate detected: $plate');
-        }
-        return plate;
-      }
-    }
-
-    if (kDebugMode) {
-      print('❌ No plate matched');
-    }
-    return null;
+  String _appendSuffix(String path, String suffix) {
+    final ext = path.split('.').last;
+    return path.replaceFirst('.$ext', '$suffix.$ext');
   }
 
   void _onReset(ResetEvent e, Emitter<AnprState> emit) {
