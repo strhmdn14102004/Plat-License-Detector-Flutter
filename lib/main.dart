@@ -1,68 +1,28 @@
+import 'package:anpr/module/ANPR/anpr_bloc.dart';
+import 'package:anpr/module/ANPR/anpr_page.dart';
+import 'package:anpr/module/history/history_anpr_bloc.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:hive_flutter/hive_flutter.dart';
-import 'package:vehicle_identification_number/module/home/home_page.dart';
-import 'package:vehicle_identification_number/module/plat%20capture/plat_capture_bloc.dart';
-import 'package:vehicle_identification_number/module/plat%20realtime/plat_realtime_bloc.dart';
-import 'package:vehicle_identification_number/module/plat_capture_mlkit/plat_capture_mlkit_bloc.dart';
-import 'package:vehicle_identification_number/module/plat_capture_mlkit/plat_capture_mlkit_page.dart';
-import 'package:vehicle_identification_number/service/ocr_isolate_pool.dart';
-import 'package:vehicle_identification_number/service/yolo_isolate_pool.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await Hive.initFlutter();
-  await Hive.openBox('plates');
-  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-  final modelBytes = await rootBundle.load(
-    'assets/models/license_plate_detector_float16.tflite',
-  );
-  final bytes = modelBytes.buffer.asUint8List();
-
-  final yoloPool = YoloIsolatePool();
-  await yoloPool.init(bytes, 640, 0.5);
-
-  final ocrPool = OcrIsolatePool();
-  ocrPool.start();
-
-  runApp(MyApp(yoloPool: yoloPool, ocrPool: ocrPool));
+void main() {
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  final YoloIsolatePool yoloPool;
-  final OcrIsolatePool ocrPool;
-
-  const MyApp({super.key, required this.yoloPool, required this.ocrPool});
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MultiBlocProvider(
       providers: [
-        BlocProvider(
-          create: (BuildContext context) =>
-              PlateRealtimeBloc(yolo: yoloPool, ocr: ocrPool),
-        ),
-        BlocProvider(
-          create: (BuildContext context) =>
-              PlateCameraCaptureBloc(yolo: yoloPool, ocr: ocrPool),
-        ),
-        BlocProvider(
-          create: (_) => PlateMlkitCaptureBloc(yolo: yoloPool, ocr: ocrPool),
-          child: const PlateMlkitCapturePage(),
-        ),
+        BlocProvider<AnprBloc>(create: (context) => AnprBloc()),
+        BlocProvider<HistoryBloc>(create: (context) => HistoryBloc()),
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
-        title: 'Plat License Scanner',
-        theme: ThemeData.dark().copyWith(
-          scaffoldBackgroundColor: const Color(0xFF0E1621),
-          appBarTheme: const AppBarTheme(
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-          ),
-        ),
-        home: const HomePage(),
+        title: 'ANPR System',
+        theme: ThemeData(primarySwatch: Colors.blue, useMaterial3: true),
+        home: const AnprHomePage(),
       ),
     );
   }

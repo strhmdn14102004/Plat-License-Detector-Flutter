@@ -11,7 +11,7 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace "com.sisapp.plat_license_detector"
+    namespace "com.sisapp.anpr"
     compileSdk 36
 
     compileOptions {
@@ -24,7 +24,7 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.sisapp.plat_license_detector"
+        applicationId "com.sisapp.anpr"
         minSdkVersion flutter.minSdkVersion
         targetSdkVersion 36
         versionCode flutter.versionCode
@@ -45,7 +45,7 @@ android {
     // 👉 aktifkan split per-ABI
     splits {
         abi {
-            enable true
+            enable false
             reset()
             include 'armeabi-v7a', 'arm64-v8a'
             universalApk false     // jangan buat universal apk (biar kecil)
@@ -73,9 +73,5 @@ flutter {
 }
 
 dependencies {
-    implementation 'com.google.mlkit:text-recognition-chinese:16.0.0'
-    implementation 'com.google.mlkit:text-recognition-devanagari:16.0.0'
-    implementation 'com.google.mlkit:text-recognition-japanese:16.0.0'
-    implementation 'com.google.mlkit:text-recognition-korean:16.0.0'
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.25"
 }
